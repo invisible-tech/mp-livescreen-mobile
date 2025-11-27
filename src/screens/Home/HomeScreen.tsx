@@ -1,17 +1,75 @@
-import React, { useCallback } from 'react';
-import { View, StyleSheet, Alert, Platform } from 'react-native';
-import { Container, Button, Text, Timer, StatusIndicator, BroadcastPicker } from '@/components';
+import React, { useCallback, useEffect, useRef } from 'react';
+import {
+  View,
+  StyleSheet,
+  Alert,
+  Platform,
+  Animated,
+  Dimensions,
+} from 'react-native';
+import {
+  Container,
+  Button,
+  Text,
+  BroadcastPicker,
+  ScreenTitle,
+} from '@/components';
 import { useTheme } from '@/context/ThemeContext';
 import { useScreenCapture } from '@/hooks';
 import { RecordingStatus } from '@/types';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export const HomeScreen: React.FC = () => {
   const { theme } = useTheme();
   const { state, startRecording, stopRecording, isRecording } = useScreenCapture();
 
+  // Pulse animation for recording state
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    if (isRecording) {
+      // Pulse animation when recording
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      // Glow animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, {
+            toValue: 0.6,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowAnim, {
+            toValue: 0.3,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+      glowAnim.setValue(0.3);
+    }
+  }, [isRecording, pulseAnim, glowAnim]);
+
   const handleToggleRecording = useCallback(async () => {
     if (isRecording) {
-      Alert.alert('Stop Recording', 'Are you sure you want to stop the recording?', [
+      Alert.alert('Stop Broadcast', 'Are you sure you want to stop sharing your screen?', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Stop',
@@ -74,28 +132,32 @@ export const HomeScreen: React.FC = () => {
   const buttonConfig = getButtonConfig();
 
   return (
-    <Container safeAreaEdges={['bottom']}>
-      <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text variant="h2" weight="bold" align="center">
-            MP Live Screen
-          </Text>
-          <Text
-            variant="bodySmall"
-            color={theme.colors.textSecondary}
-            align="center"
-            style={styles.subtitle}
-          >
-            Share your screen with the world
-          </Text>
-        </View>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {/* Background gradient when recording */}
+      {isRecording && (
+        <Animated.View style={[styles.recordingGlow, { opacity: glowAnim }]}>
+          <View style={[styles.glowCircle, styles.glowCircle1]} />
+          <View style={[styles.glowCircle, styles.glowCircle2]} />
+        </Animated.View>
+      )}
 
-        {/* Timer Section */}
-        <View style={styles.timerSection}>
-          <Timer isRunning={isRecording} startTime={state.startTime} />
-          <StatusIndicator status={state.status} style={styles.statusIndicator} />
-        </View>
+      <Container safeAreaEdges={['bottom']} style={styles.innerContainer}>
+        <ScreenTitle title="Live Capture" />
+
+        {/* Live Badge when recording */}
+        {isRecording && (
+          <Animated.View
+            style={[
+              styles.liveBadgeContainer,
+              { transform: [{ scale: pulseAnim }] },
+            ]}
+          >
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Error Message */}
         {state.error && (
@@ -104,7 +166,7 @@ export const HomeScreen: React.FC = () => {
               styles.errorContainer,
               {
                 backgroundColor: `${theme.colors.error}15`,
-                borderRadius: theme.borderRadius.md,
+                borderColor: `${theme.colors.error}30`,
               },
             ]}
           >
@@ -113,116 +175,108 @@ export const HomeScreen: React.FC = () => {
             </Text>
           </View>
         )}
+      </Container>
 
-        {/* Spacer */}
-        <View style={styles.spacer} />
-
-        {/* Instructions */}
-        {!isRecording && state.status === RecordingStatus.IDLE && (
-          <View style={styles.instructions}>
-            {Platform.OS === 'ios' ? (
-              <>
-                <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-                  Tap the broadcast button below to share your screen.
-                </Text>
-                <Text
-                  variant="caption"
-                  color={theme.colors.textTertiary}
-                  align="center"
-                  style={styles.instructionNote}
-                >
-                  Select "MP Live Screen Broadcast" from the picker to start.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-                  Tap the button below to start broadcasting your screen.
-                </Text>
-                <Text
-                  variant="caption"
-                  color={theme.colors.textTertiary}
-                  align="center"
-                  style={styles.instructionNote}
-                >
-                  Your screen will be recorded and sent to the server in real-time.
-                </Text>
-              </>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Bottom Button Section */}
-      <View style={styles.buttonContainer}>
-        {Platform.OS === 'ios' && state.status === RecordingStatus.IDLE ? (
-          // iOS: Show the broadcast picker or fallback button
-          <View style={styles.iosButtonContainer}>
+      {/* Bottom Button Section - Fixed at bottom */}
+      <View style={[styles.buttonContainer, { backgroundColor: theme.colors.background }]}>
+          {Platform.OS === 'ios' ? (
             <BroadcastPicker
-              style={styles.broadcastPickerFull}
+              style={styles.broadcastPicker}
               onPress={handleToggleRecording}
+              isRecording={isRecording}
+              startTime={state.startTime}
             />
-          </View>
-        ) : (
-          // Android or iOS (when recording)
-          <Button
-            title={buttonConfig.title}
-            icon={buttonConfig.icon}
-            variant={buttonConfig.variant}
-            size="xl"
-            onPress={handleToggleRecording}
-            loading={buttonConfig.loading}
-            disabled={buttonConfig.loading}
-            fullWidth
-          />
-        )}
-      </View>
-    </Container>
+          ) : (
+            <Button
+              title={buttonConfig.title}
+              icon={buttonConfig.icon}
+              variant={buttonConfig.variant}
+              size="xl"
+              onPress={handleToggleRecording}
+              loading={buttonConfig.loading}
+              disabled={buttonConfig.loading}
+              fullWidth
+            />
+          )}
+        </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  content: {
+  container: {
     flex: 1,
-    paddingTop: 20,
   },
-  header: {
-    marginBottom: 40,
+  innerContainer: {
+    flex: 1,
   },
-  subtitle: {
-    marginTop: 8,
+  recordingGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
-  timerSection: {
+  glowCircle: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: '#FF3B30',
+  },
+  glowCircle1: {
+    width: SCREEN_WIDTH * 1.5,
+    height: SCREEN_WIDTH * 1.5,
+    top: -SCREEN_WIDTH * 0.5,
+    left: -SCREEN_WIDTH * 0.25,
+    opacity: 0.1,
+  },
+  glowCircle2: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH,
+    bottom: -SCREEN_WIDTH * 0.3,
+    right: -SCREEN_WIDTH * 0.3,
+    opacity: 0.08,
+  },
+  liveBadgeContainer: {
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  statusIndicator: {
     marginTop: 16,
   },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+    marginRight: 6,
+  },
+  liveText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
   errorContainer: {
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  spacer: {
-    flex: 1,
-  },
-  instructions: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  instructionNote: {
-    marginTop: 8,
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   buttonContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 12,
+    paddingTop: 16,
   },
-  iosButtonContainer: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  broadcastPickerFull: {
+  broadcastPicker: {
     width: '100%',
   },
 });

@@ -5,12 +5,12 @@ import {
   TouchableOpacity,
   ScrollView,
   Switch,
-  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Container, Text } from '@/components';
+import DeviceInfo from 'react-native-device-info';
+import { Text, ScreenTitle } from '@/components';
 import { useTheme } from '@/context/ThemeContext';
-import { APP_CONFIG, ENV } from '@/config';
+import { APP_CONFIG } from '@/config';
 import type { ThemeMode } from '@/types';
 
 interface SettingItemProps {
@@ -116,20 +116,9 @@ export const SettingsScreen: React.FC = () => {
     setThemeMode('system');
   }, [setThemeMode]);
 
-  const handlePrivacyPolicy = useCallback(() => {
-    Linking.openURL('https://inv.tech/privacy');
-  }, []);
-
-  const handleTerms = useCallback(() => {
-    Linking.openURL('https://inv.tech/terms');
-  }, []);
-
-  const handleSupport = useCallback(() => {
-    Linking.openURL('mailto:support@inv.tech');
-  }, []);
-
   return (
-    <Container safeAreaEdges={['bottom']} padding={false}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ScreenTitle title="Settings" />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -177,75 +166,28 @@ export const SettingsScreen: React.FC = () => {
             }
           />
         </SettingSection>
-
-        {/* Recording Section */}
-        <SettingSection title="Recording">
-          <SettingItem
-            icon="videocam-outline"
-            title="Video Quality"
-            subtitle="1080p @ 60fps"
-            showChevron
-          />
-          <SettingItem
-            icon="server-outline"
-            title="Server"
-            subtitle={ENV.apiBaseUrl}
-          />
-        </SettingSection>
-
-        {/* About Section */}
-        <SettingSection title="About">
-          <SettingItem
-            icon="information-circle-outline"
-            title="Version"
-            subtitle={`${APP_CONFIG.VERSION} (${APP_CONFIG.ENV})`}
-          />
-          <SettingItem
-            icon="shield-checkmark-outline"
-            title="Privacy Policy"
-            onPress={handlePrivacyPolicy}
-            showChevron
-          />
-          <SettingItem
-            icon="document-text-outline"
-            title="Terms of Service"
-            onPress={handleTerms}
-            showChevron
-          />
-          <SettingItem
-            icon="mail-outline"
-            title="Contact Support"
-            onPress={handleSupport}
-            showChevron
-          />
-        </SettingSection>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text variant="caption" color={theme.colors.textTertiary} align="center">
-            Made with ❤️ by Invisible Technologies
-          </Text>
-          <Text
-            variant="label"
-            color={theme.colors.textTertiary}
-            align="center"
-            style={styles.footerSubtext}
-          >
-            {APP_CONFIG.APP_NAME} • {APP_CONFIG.BUNDLE_ID}
-          </Text>
-        </View>
       </ScrollView>
-    </Container>
+
+      {/* Version Footer - Fixed at bottom */}
+      <View style={styles.versionFooter}>
+        <Text variant="caption" color={theme.colors.textTertiary} align="center">
+          {DeviceInfo.getVersion()}.{DeviceInfo.getBuildNumber()} ({APP_CONFIG.ENV})
+        </Text>
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 80,
   },
   section: {
     marginBottom: 24,
@@ -281,12 +223,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  footer: {
-    marginTop: 16,
-    paddingTop: 24,
-  },
-  footerSubtext: {
-    marginTop: 4,
+  versionFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingBottom: 24,
   },
 });
 

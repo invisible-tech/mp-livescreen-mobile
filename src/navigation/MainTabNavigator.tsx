@@ -1,10 +1,19 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '@/context/ThemeContext';
 import { HomeScreen, SettingsScreen } from '@/screens';
 import type { MainTabsParamList } from './types';
+
+const HeaderRightButton: React.FC<{ color: string }> = ({ color }) => (
+  <TouchableOpacity 
+    style={{ marginRight: 16, padding: 8 }} 
+    onPress={() => console.log('Menu pressed')}
+  >
+    <Icon name="ellipsis-horizontal-circle-outline" size={28} color={color} />
+  </TouchableOpacity>
+);
 
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 
@@ -31,14 +40,15 @@ export const MainTabNavigator: React.FC = () => {
           backgroundColor: theme.colors.background,
           elevation: 0,
           shadowOpacity: 0,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: theme.colors.border,
+          borderBottomWidth: 0,
         },
         headerTitleStyle: {
           color: theme.colors.text,
-          fontWeight: '600',
-          fontSize: 17,
+          fontWeight: '700',
+          fontSize: 18,
+          marginLeft: 0,
         },
+        headerTitleAlign: 'left',
         tabBarStyle: {
           backgroundColor: theme.colors.background,
           borderTopWidth: StyleSheet.hairlineWidth,
@@ -59,18 +69,19 @@ export const MainTabNavigator: React.FC = () => {
         name="Home"
         component={HomeScreen}
         options={{
-          title: 'MP Live Screen',
+          title: '',
           tabBarLabel: 'Home',
           tabBarIcon: ({ focused, color, size }) => (
             <TabIcon name="home" focused={focused} color={color} size={size} />
           ),
+          headerRight: () => <HeaderRightButton color={theme.colors.text} />,
         }}
       />
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
-          title: 'Settings',
+          title: '',
           tabBarLabel: 'Settings',
           tabBarIcon: ({ focused, color, size }) => (
             <TabIcon name="settings" focused={focused} color={color} size={size} />

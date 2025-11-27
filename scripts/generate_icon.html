@@ -54,7 +54,7 @@
     </style>
 </head>
 <body>
-    <h1>🎬 MP Live Screen</h1>
+    <h1>🎬 MP LiveCapture</h1>
     <p>App Icon Generator</p>
     
     <div class="icon-container">
@@ -62,21 +62,49 @@
     </div>
     
     <div class="buttons">
-        <button class="primary" onclick="download(1024)">Download 1024x1024</button>
-        <button class="secondary" onclick="download(180)">Download 180x180</button>
-        <button class="secondary" onclick="download(120)">Download 120x120</button>
+        <p style="width:100%; margin-bottom: 10px; color: #FF3B30; font-weight: 600;">App Icon</p>
+        <button class="primary" onclick="download(1024)">1024x1024 (App Store)</button>
+        <button class="secondary" onclick="download(180)">180x180 (60pt @3x)</button>
+        <button class="secondary" onclick="download(120)">120x120 (60pt @2x)</button>
+    </div>
+    
+    <div class="buttons">
+        <p style="width:100%; margin-bottom: 10px; color: #888; font-weight: 600;">Spotlight</p>
+        <button class="secondary" onclick="download(120)">120x120 (40pt @3x)</button>
+        <button class="secondary" onclick="download(80)">80x80 (40pt @2x)</button>
+    </div>
+    
+    <div class="buttons">
+        <p style="width:100%; margin-bottom: 10px; color: #888; font-weight: 600;">Notifications</p>
+        <button class="secondary" onclick="download(60)">60x60 (20pt @3x)</button>
+        <button class="secondary" onclick="download(40)">40x40 (20pt @2x)</button>
+    </div>
+    
+    <div class="buttons">
+        <p style="width:100%; margin-bottom: 10px; color: #888; font-weight: 600;">Settings</p>
+        <button class="secondary" onclick="download(87)">87x87 (29pt @3x)</button>
+        <button class="secondary" onclick="download(58)">58x58 (29pt @2x)</button>
     </div>
     
     <div class="instructions">
         <h3>How to Use</h3>
         <ol>
-            <li>Click each download button to save all 3 sizes</li>
+            <li>Click each download button to save all sizes</li>
             <li>In Xcode, open <strong>Images.xcassets → AppIcon</strong></li>
-            <li>Drag <strong>icon-1024.png</strong> to the 1024x1024 slot</li>
-            <li>Drag <strong>icon-180.png</strong> to the 60pt @3x slot</li>
-            <li>Drag <strong>icon-120.png</strong> to the 60pt @2x slot</li>
+            <li>Drag each icon to its corresponding slot</li>
             <li>Archive and upload again!</li>
         </ol>
+        <h4 style="margin-top: 20px;">Size Reference</h4>
+        <table style="width: 100%; text-align: left; font-size: 12px;">
+            <tr><td>1024x1024</td><td>App Store</td></tr>
+            <tr><td>180x180</td><td>iPhone App (60pt @3x)</td></tr>
+            <tr><td>120x120</td><td>iPhone App (60pt @2x) / Spotlight @3x</td></tr>
+            <tr><td>87x87</td><td>Settings @3x</td></tr>
+            <tr><td>80x80</td><td>Spotlight @2x</td></tr>
+            <tr><td>60x60</td><td>Notifications @3x</td></tr>
+            <tr><td>58x58</td><td>Settings @2x</td></tr>
+            <tr><td>40x40</td><td>Notifications @2x</td></tr>
+        </table>
     </div>
 
     <script>
@@ -94,30 +122,23 @@
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, size, size);
             
-            // Record circle (outer)
+            // Record circle (outer glow)
             ctx.beginPath();
-            ctx.arc(size/2, size/2 - 50*scale, 280*scale, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.arc(size/2, size/2, 320*scale, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
             ctx.fill();
             
-            // Record circle (inner)
+            // Record circle (white ring)
             ctx.beginPath();
-            ctx.arc(size/2, size/2 - 50*scale, 200*scale, 0, Math.PI * 2);
+            ctx.arc(size/2, size/2, 260*scale, 0, Math.PI * 2);
             ctx.fillStyle = 'white';
             ctx.fill();
             
-            // Record dot
+            // Record dot (center)
             ctx.beginPath();
-            ctx.arc(size/2, size/2 - 50*scale, 80*scale, 0, Math.PI * 2);
+            ctx.arc(size/2, size/2, 120*scale, 0, Math.PI * 2);
             ctx.fillStyle = '#FF3B30';
             ctx.fill();
-            
-            // Text "MP"
-            ctx.fillStyle = 'white';
-            ctx.font = `bold ${180*scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('MP', size/2, size/2 + 280*scale);
         }
         
         // Draw initial icon

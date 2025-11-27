@@ -21,8 +21,8 @@ export const RECORDING_CONFIG = {
 // App Configuration
 export const APP_CONFIG = {
   ENV: Config.APP_ENV || 'dev',
-  APP_NAME: 'MP Live Screen',
-  VERSION: '1.0.0',
+  APP_NAME: 'MP LiveCapture',
+  VERSION: '0.9.0',
   BUNDLE_ID: 'com.marketplace.live.screen',
 };
 
