@@ -39,7 +39,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     
     override init() {
         // Read from App Group shared defaults
-        let appGroup = "group.com.marketplace.livescreen"
+        let appGroup = "group.com.marketplace.live.screen"
         let defaults = UserDefaults(suiteName: appGroup)
         
         self.apiBaseUrl = defaults?.string(forKey: "apiBaseUrl") ?? "https://vdi-dev.invsta.systems"

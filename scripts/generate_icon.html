@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MP Live Screen Icon Generator</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: white;
+            margin: 0;
+            padding: 20px;
+        }
+        .icon-container {
+            margin: 20px;
+        }
+        canvas {
+            border-radius: 22.5%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        h1 { margin-bottom: 10px; }
+        p { color: #888; margin-bottom: 30px; }
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 14px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .primary { background: #FF3B30; color: white; }
+        .secondary { background: #333; color: white; }
+        .instructions {
+            max-width: 500px;
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+        }
+        .instructions h3 { margin-top: 0; color: #FF3B30; }
+        .instructions ol { text-align: left; }
+    </style>
+</head>
+<body>
+    <h1>🎬 MP Live Screen</h1>
+    <p>App Icon Generator</p>
+    
+    <div class="icon-container">
+        <canvas id="icon" width="1024" height="1024"></canvas>
+    </div>
+    
+    <div class="buttons">
+        <button class="primary" onclick="download(1024)">Download 1024x1024</button>
+        <button class="secondary" onclick="download(180)">Download 180x180</button>
+        <button class="secondary" onclick="download(120)">Download 120x120</button>
+    </div>
+    
+    <div class="instructions">
+        <h3>How to Use</h3>
+        <ol>
+            <li>Click each download button to save all 3 sizes</li>
+            <li>In Xcode, open <strong>Images.xcassets → AppIcon</strong></li>
+            <li>Drag <strong>icon-1024.png</strong> to the 1024x1024 slot</li>
+            <li>Drag <strong>icon-180.png</strong> to the 60pt @3x slot</li>
+            <li>Drag <strong>icon-120.png</strong> to the 60pt @2x slot</li>
+            <li>Archive and upload again!</li>
+        </ol>
+    </div>
+
+    <script>
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const scale = size / 1024;
+            
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#FF3B30');
+            gradient.addColorStop(1, '#FF6B5B');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Record circle (outer)
+            ctx.beginPath();
+            ctx.arc(size/2, size/2 - 50*scale, 280*scale, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.fill();
+            
+            // Record circle (inner)
+            ctx.beginPath();
+            ctx.arc(size/2, size/2 - 50*scale, 200*scale, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+            
+            // Record dot
+            ctx.beginPath();
+            ctx.arc(size/2, size/2 - 50*scale, 80*scale, 0, Math.PI * 2);
+            ctx.fillStyle = '#FF3B30';
+            ctx.fill();
+            
+            // Text "MP"
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${180*scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('MP', size/2, size/2 + 280*scale);
+        }
+        
+        // Draw initial icon
+        drawIcon(document.getElementById('icon'), 1024);
+        
+        function download(size) {
+            const canvas = document.createElement('canvas');
+            drawIcon(canvas, size);
+            
+            const link = document.createElement('a');
+            link.download = `icon-${size}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
+

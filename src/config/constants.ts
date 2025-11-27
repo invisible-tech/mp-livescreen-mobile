@@ -23,7 +23,7 @@ export const APP_CONFIG = {
   ENV: Config.APP_ENV || 'dev',
   APP_NAME: 'MP Live Screen',
   VERSION: '1.0.0',
-  BUNDLE_ID: 'com.marketplace.livescreen',
+  BUNDLE_ID: 'com.marketplace.live.screen',
 };
 
 // API Endpoints
@@ -47,7 +47,7 @@ export const STORAGE_KEYS = {
 export const PLATFORM_CONFIG = {
   IOS: {
     MIN_VERSION: '17.0',
-    BROADCAST_EXTENSION_BUNDLE_ID: 'com.marketplace.livescreen.broadcast',
+    BROADCAST_EXTENSION_BUNDLE_ID: 'com.marketplace.live.screen.broadcast',
   },
   ANDROID: {
     MIN_SDK: 33,

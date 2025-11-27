@@ -9,10 +9,6 @@
 /* Begin PBXBuildFile section */
 		012F05B52ED819BB00640702 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 012F05B42ED819BB00640702 /* ReplayKit.framework */; };
 		012F05B82ED819BB00640702 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012F05B72ED819BB00640702 /* SampleHandler.swift */; };
-		012F05BF2ED819BB00640702 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 012F05B42ED819BB00640702 /* ReplayKit.framework */; };
-		012F05C12ED819BB00640702 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 012F05C02ED819BB00640702 /* UIKit.framework */; };
-		012F05C42ED819BB00640702 /* BroadcastSetupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012F05C32ED819BB00640702 /* BroadcastSetupViewController.swift */; };
-		012F05C82ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 012F05BE2ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		012F05CB2ED819BB00640702 /* MPLiveScreen-Broadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 012F05B32ED819BB00640702 /* MPLiveScreen-Broadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		01CC3C852ED8330500E2DA53 /* BroadcastPickerView.m in Sources */ = {isa = PBXBuildFile; fileRef = 01CC3C812ED8330500E2DA53 /* BroadcastPickerView.m */; };
 		01CC3C862ED8330500E2DA53 /* BroadcastPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CC3C822ED8330500E2DA53 /* BroadcastPickerView.swift */; };
@@ -27,13 +23,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		012F05C62ED819BB00640702 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 012F05BD2ED819BB00640702;
-			remoteInfo = "MPLiveScreen-BroadcastSetupUI";
-		};
 		012F05C92ED819BB00640702 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
@@ -50,7 +39,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				012F05C82ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI.appex in Embed Foundation Extensions */,
 				012F05CB2ED819BB00640702 /* MPLiveScreen-Broadcast.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
@@ -63,10 +51,10 @@
 		012F05B42ED819BB00640702 /* ReplayKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ReplayKit.framework; path = System/Library/Frameworks/ReplayKit.framework; sourceTree = SDKROOT; };
 		012F05B72ED819BB00640702 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		012F05B92ED819BB00640702 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		012F05BE2ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "MPLiveScreen-BroadcastSetupUI.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		012F05C02ED819BB00640702 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		012F05C32ED819BB00640702 /* BroadcastSetupViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BroadcastSetupViewController.swift; sourceTree = "<group>"; };
 		012F05C52ED819BB00640702 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		015861482ED8C75D00F8AC87 /* MPLiveScreen-Broadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "MPLiveScreen-Broadcast.entitlements"; sourceTree = "<group>"; };
 		01CC3C812ED8330500E2DA53 /* BroadcastPickerView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = BroadcastPickerView.m; path = MPLiveScreen/BroadcastPickerView.m; sourceTree = "<group>"; };
 		01CC3C822ED8330500E2DA53 /* BroadcastPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BroadcastPickerView.swift; path = MPLiveScreen/BroadcastPickerView.swift; sourceTree = "<group>"; };
 		01CC3C832ED8330500E2DA53 /* ScreenCaptureModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ScreenCaptureModule.m; path = MPLiveScreen/ScreenCaptureModule.m; sourceTree = "<group>"; };
@@ -96,15 +84,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		012F05BB2ED819BB00640702 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				012F05BF2ED819BB00640702 /* ReplayKit.framework in Frameworks */,
-				012F05C12ED819BB00640702 /* UIKit.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -119,6 +98,7 @@
 		012F05B62ED819BB00640702 /* MPLiveScreen-Broadcast */ = {
 			isa = PBXGroup;
 			children = (
+				015861482ED8C75D00F8AC87 /* MPLiveScreen-Broadcast.entitlements */,
 				012F05B72ED819BB00640702 /* SampleHandler.swift */,
 				012F05B92ED819BB00640702 /* Info.plist */,
 			);
@@ -190,7 +170,6 @@
 			children = (
 				13B07F961A680F5B00A75B9A /* MPLiveScreen.app */,
 				012F05B32ED819BB00640702 /* MPLiveScreen-Broadcast.appex */,
-				012F05BE2ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -227,23 +206,6 @@
 			productReference = 012F05B32ED819BB00640702 /* MPLiveScreen-Broadcast.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		012F05BD2ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 012F05D12ED819BB00640702 /* Build configuration list for PBXNativeTarget "MPLiveScreen-BroadcastSetupUI" */;
-			buildPhases = (
-				012F05BA2ED819BB00640702 /* Sources */,
-				012F05BB2ED819BB00640702 /* Frameworks */,
-				012F05BC2ED819BB00640702 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "MPLiveScreen-BroadcastSetupUI";
-			productName = "MPLiveScreen-BroadcastSetupUI";
-			productReference = 012F05BE2ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 		13B07F861A680F5B00A75B9A /* MPLiveScreen */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "MPLiveScreen" */;
@@ -260,7 +222,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				012F05C72ED819BB00640702 /* PBXTargetDependency */,
 				012F05CA2ED819BB00640702 /* PBXTargetDependency */,
 			);
 			name = MPLiveScreen;
@@ -278,9 +239,6 @@
 				LastUpgradeCheck = 1210;
 				TargetAttributes = {
 					012F05B22ED819BB00640702 = {
-						CreatedOnToolsVersion = 15.4;
-					};
-					012F05BD2ED819BB00640702 = {
 						CreatedOnToolsVersion = 15.4;
 					};
 					13B07F861A680F5B00A75B9A = {
@@ -303,20 +261,12 @@
 			targets = (
 				13B07F861A680F5B00A75B9A /* MPLiveScreen */,
 				012F05B22ED819BB00640702 /* MPLiveScreen-Broadcast */,
-				012F05BD2ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		012F05B12ED819BB00640702 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		012F05BC2ED819BB00640702 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -449,14 +399,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		012F05BA2ED819BB00640702 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				012F05C42ED819BB00640702 /* BroadcastSetupViewController.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		13B07F871A680F5B00A75B9A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -472,11 +414,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		012F05C72ED819BB00640702 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 012F05BD2ED819BB00640702 /* MPLiveScreen-BroadcastSetupUI */;
-			targetProxy = 012F05C62ED819BB00640702 /* PBXContainerItemProxy */;
-		};
 		012F05CA2ED819BB00640702 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 012F05B22ED819BB00640702 /* MPLiveScreen-Broadcast */;
@@ -496,10 +433,11 @@
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = "MPLiveScreen-Broadcast/MPLiveScreen-Broadcast.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 6C5UK2AQA3;
+				DEVELOPMENT_TEAM = YDS8RPBC4T;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -516,7 +454,7 @@
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.livescreen.broadcast;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.live.screen.broadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -538,11 +476,12 @@
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = "MPLiveScreen-Broadcast/MPLiveScreen-Broadcast.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 6C5UK2AQA3;
+				DEVELOPMENT_TEAM = YDS8RPBC4T;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -558,88 +497,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MARKETING_VERSION = 1.0;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.livescreen.broadcast;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		012F05CF2ED819BB00640702 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 6C5UK2AQA3;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "MPLiveScreen-BroadcastSetupUI/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "MPLiveScreen-BroadcastSetupUI";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 1.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.livescreen.broadcastSetupUI;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		012F05D02ED819BB00640702 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_STYLE = Automatic;
-				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 6C5UK2AQA3;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "MPLiveScreen-BroadcastSetupUI/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "MPLiveScreen-BroadcastSetupUI";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 1.0;
-				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.livescreen.broadcastSetupUI;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.live.screen.broadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -657,23 +515,27 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MPLiveScreen/MPLiveScreen.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6C5UK2AQA3;
+				DEVELOPMENT_TEAM = YDS8RPBC4T;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = MPLiveScreen/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				INFOPLIST_KEY_CFBundleDisplayName = "MP LiveCapture";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.livescreen;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.live.screen;
 				PRODUCT_NAME = MPLiveScreen;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "MPLiveScreen/MPLiveScreen-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -689,22 +551,26 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MPLiveScreen/MPLiveScreen.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6C5UK2AQA3;
+				DEVELOPMENT_TEAM = YDS8RPBC4T;
 				INFOPLIST_FILE = MPLiveScreen/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				INFOPLIST_KEY_CFBundleDisplayName = "MP LiveCapture";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.livescreen;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marketplace.live.screen;
 				PRODUCT_NAME = MPLiveScreen;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "MPLiveScreen/MPLiveScreen-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -858,15 +724,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		012F05D12ED819BB00640702 /* Build configuration list for PBXNativeTarget "MPLiveScreen-BroadcastSetupUI" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				012F05CF2ED819BB00640702 /* Debug */,
-				012F05D02ED819BB00640702 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		012F05D22ED819BB00640702 /* Build configuration list for PBXNativeTarget "MPLiveScreen-Broadcast" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

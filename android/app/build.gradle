@@ -79,7 +79,7 @@ android {
 
     namespace "com.mplivescreen"
     defaultConfig {
-        applicationId "com.marketplace.livescreen"
+        applicationId "com.marketplace.live.screen"
         minSdkVersion 33 // Android 13+
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

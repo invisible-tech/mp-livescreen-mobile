@@ -84,9 +84,9 @@ cd ..
 1. Open `ios/MPLiveScreen.xcworkspace` in Xcode
 2. Add a new target: File → New → Target → Broadcast Upload Extension
 3. Name it `BroadcastExtension`
-4. Set Bundle Identifier to `com.marketplace.livescreen.broadcast`
+4. Set Bundle Identifier to `com.marketplace.live.screen.broadcast`
 5. Add App Group capability to both main app and extension:
-   - Group ID: `group.com.marketplace.livescreen`
+   - Group ID: `group.com.marketplace.live.screen`
 6. Copy the Swift files from `ios/BroadcastExtension/` to your new target
 
 ### 3. Android Setup
