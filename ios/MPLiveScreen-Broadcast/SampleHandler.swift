@@ -68,7 +68,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     
     private let appGroup = "group.com.marketplace.live.screen"
     private let uploadEndpoint = "/api/upload-mobile-content"
-    private var chunkDuration: TimeInterval = 5.0
+    private var chunkDuration: TimeInterval = 10.0
     private var apiBaseUrl: String = "https://vdi-dev-ali.invsta.systems"
     
     // MARK: - Task Parameters
@@ -86,7 +86,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var lastChunkTime: Date?
     private var frameCount: Int = 0
     
-    // MARK: - Video Writing
+    // MARK: - Video Writing (Video + App Audio)
     
     private var assetWriter: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
@@ -99,6 +99,15 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var pendingVideoSample: CMSampleBuffer?
     private var pendingAudioSample: CMSampleBuffer?
     private var videoSize: CGSize = .zero
+    
+    // MARK: - Mic Audio Writing (Separate file)
+    
+    private var micWriter: AVAssetWriter?
+    private var micInput: AVAssetWriterInput?
+    private var currentMicURL: URL?
+    private var isMicWriterConfigured = false
+    private var isMicWriting = false
+    private var pendingMicSample: CMSampleBuffer?
     
     // MARK: - Chunk URLs for merging
     private var completedChunkURLs: [URL] = []
@@ -170,6 +179,11 @@ class SampleHandler: RPBroadcastSampleHandler {
         pendingVideoSample = nil
         pendingAudioSample = nil
         
+        // Reset mic writer state
+        isMicWriterConfigured = false
+        isMicWriting = false
+        pendingMicSample = nil
+        
         log.log("Recording ID: \(recordingId ?? "unknown")")
         log.log("Task: tenant=\(tenantId ?? "nil"), campaign=\(campaignId ?? "nil"), task=\(taskId ?? "nil")")
         
@@ -210,14 +224,16 @@ class SampleHandler: RPBroadcastSampleHandler {
                     }
                 }
         case .audioApp:
-            // Only capture app/system audio (consistent format)
-            // Mixing audioApp + audioMic causes format mismatch and distortion
+            // App/system audio goes to main writer
             if pendingAudioSample == nil {
                 pendingAudioSample = sampleBuffer
             }
         case .audioMic:
-            // Skip mic audio - format differs from app audio
-            break
+            // Mic audio goes to separate writer (human_X.m4a)
+            if pendingMicSample == nil {
+                pendingMicSample = sampleBuffer
+                configureMicWriter()
+            }
             @unknown default:
                 break
             }
@@ -243,13 +259,15 @@ class SampleHandler: RPBroadcastSampleHandler {
             }
             
         case .audioApp:
-            // Only process app audio (system sounds, media playback)
+            // App audio goes to main writer
             if let input = audioInput, input.isReadyForMoreMediaData {
                 input.append(sampleBuffer)
             }
         case .audioMic:
-            // Skip mic - different format causes distortion
-            break
+            // Mic audio goes to separate mic writer
+            if let input = micInput, input.isReadyForMoreMediaData {
+                input.append(sampleBuffer)
+            }
             
         @unknown default:
             break
@@ -328,6 +346,54 @@ class SampleHandler: RPBroadcastSampleHandler {
         log.log("Writer configured: \(width)x\(height)")
     }
     
+    // MARK: - Mic Writer Configuration
+    
+    private func configureMicWriter() {
+        guard let micSample = pendingMicSample,
+              let formatDesc = CMSampleBufferGetFormatDescription(micSample),
+              let micWriter = micWriter,
+              !isMicWriterConfigured else {
+            return
+        }
+        
+        let log = ExtensionLogger.shared
+        
+        // Get mic audio format
+        if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee {
+            log.log("Mic: \(Int(asbd.mSampleRate)) Hz, \(asbd.mChannelsPerFrame) ch")
+            
+            // Use mic's native format for best quality
+            let micSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: asbd.mSampleRate,
+                AVNumberOfChannelsKey: asbd.mChannelsPerFrame,
+                AVEncoderBitRateKey: 128000
+            ]
+            
+            micInput = AVAssetWriterInput(mediaType: .audio, outputSettings: micSettings)
+            micInput?.expectsMediaDataInRealTime = true
+            
+            if let micInput = micInput, micWriter.canAdd(micInput) {
+                micWriter.add(micInput)
+            }
+        }
+        
+        micWriter.startWriting()
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(micSample)
+        micWriter.startSession(atSourceTime: timestamp)
+        
+        // Write pending sample
+        if let input = micInput, input.isReadyForMoreMediaData {
+            input.append(micSample)
+        }
+        
+        isMicWriterConfigured = true
+        isMicWriting = true
+        pendingMicSample = nil
+        
+        log.log("Mic writer configured")
+    }
+    
     // MARK: - Chunk Management
     
     private func checkChunkDuration() {
@@ -349,21 +415,34 @@ class SampleHandler: RPBroadcastSampleHandler {
         let chunksDir = containerURL.appendingPathComponent("chunks")
         try? FileManager.default.createDirectory(at: chunksDir, withIntermediateDirectories: true)
         
+        // Video chunk (video + app audio)
         let chunkFileName = "chunk_\(recordingId ?? "unknown")_\(chunkIndex).mp4"
         currentChunkURL = chunksDir.appendingPathComponent(chunkFileName)
         
-        guard let url = currentChunkURL else { return }
+        // Mic audio chunk (human_X.m4a)
+        let micFileName = "human_\(recordingId ?? "unknown")_\(chunkIndex).m4a"
+        currentMicURL = chunksDir.appendingPathComponent(micFileName)
+        
+        guard let url = currentChunkURL, let micUrl = currentMicURL else { return }
         
         try? FileManager.default.removeItem(at: url)
+        try? FileManager.default.removeItem(at: micUrl)
         
         do {
+            // Video writer
             assetWriter = try AVAssetWriter(url: url, fileType: .mp4)
             isWriterConfigured = false
             isWriting = false
             pendingVideoSample = nil
             pendingAudioSample = nil
             
-            NSLog("[BroadcastExtension] Prepared chunk \(chunkIndex)")
+            // Mic writer
+            micWriter = try AVAssetWriter(url: micUrl, fileType: .m4a)
+            isMicWriterConfigured = false
+            isMicWriting = false
+            pendingMicSample = nil
+            
+            NSLog("[BroadcastExtension] Prepared chunk \(chunkIndex) (video + mic)")
         } catch {
             NSLog("[BroadcastExtension] Failed to create writer: \(error)")
         }
@@ -373,27 +452,47 @@ class SampleHandler: RPBroadcastSampleHandler {
         guard isWriting else { return }
         isWriting = false
         
+        let currentIndex = chunkIndex
+        let chunkURL = currentChunkURL
+        let micURL = currentMicURL
+        
+        // Wait a bit for mic writer to catch up if video finished first
+        if !isMicWriterConfigured && pendingMicSample != nil {
+            Thread.sleep(forTimeInterval: 0.1) // 100ms grace period
+        }
+        
+        // Finalize video writer
         videoInput?.markAsFinished()
         audioInput?.markAsFinished()
         
-        let currentIndex = chunkIndex
-        let chunkURL = currentChunkURL
-        
-        let semaphore = DispatchSemaphore(value: 0)
+        let videoSemaphore = DispatchSemaphore(value: 0)
         
         assetWriter?.finishWriting { [weak self] in
             if let url = chunkURL, FileManager.default.fileExists(atPath: url.path) {
                 self?.completedChunkURLs.append(url)
             }
-            semaphore.signal()
+            videoSemaphore.signal()
         }
         
-        _ = semaphore.wait(timeout: .now() + 5.0)
+        // Finalize mic writer
+        let micSemaphore = DispatchSemaphore(value: 0)
         
-        // Upload chunk
-        if let url = chunkURL {
-            uploadChunk(fileURL: url, chunkIndex: currentIndex, isFinal: isFinal)
+        if isMicWriting {
+            isMicWriting = false
+            micInput?.markAsFinished()
+            
+            micWriter?.finishWriting {
+                micSemaphore.signal()
+            }
+        } else {
+            micSemaphore.signal()
         }
+        
+        _ = videoSemaphore.wait(timeout: .now() + 5.0)
+        _ = micSemaphore.wait(timeout: .now() + 5.0)
+        
+        // Upload both video and mic in single request
+        uploadChunk(videoURL: chunkURL, micURL: micURL, chunkIndex: currentIndex, isFinal: isFinal)
         
         chunkIndex += 1
     }
@@ -402,32 +501,54 @@ class SampleHandler: RPBroadcastSampleHandler {
         let log = ExtensionLogger.shared
         log.log("📦 Finalizing...")
         
+        let currentIndex = chunkIndex
+        let chunkURL = currentChunkURL
+        let micURL = currentMicURL
+        
+        // Wait a bit for mic writer to catch up if video finished first
+        if !isMicWriterConfigured && pendingMicSample != nil {
+            Thread.sleep(forTimeInterval: 0.1) // 100ms grace period
+        }
+        
+        // Finalize video writer
         if isWriting {
             isWriting = false
             videoInput?.markAsFinished()
             audioInput?.markAsFinished()
             
-            let currentIndex = chunkIndex
-            let chunkURL = currentChunkURL
-            
-            let semaphore = DispatchSemaphore(value: 0)
+            let videoSemaphore = DispatchSemaphore(value: 0)
             
             assetWriter?.finishWriting { [weak self] in
                 if let url = chunkURL, FileManager.default.fileExists(atPath: url.path) {
                     self?.completedChunkURLs.append(url)
-                    log.log("✅ Final chunk \(currentIndex) saved")
+                    log.log("✅ Final video chunk \(currentIndex) saved")
                 }
-                semaphore.signal()
+                videoSemaphore.signal()
             }
             
-            _ = semaphore.wait(timeout: .now() + 5.0)
+            _ = videoSemaphore.wait(timeout: .now() + 5.0)
             
-            if let url = chunkURL {
-                uploadChunk(fileURL: url, chunkIndex: currentIndex, isFinal: true)
-            }
-            
-            chunkIndex += 1
         }
+        
+        // Finalize mic writer
+        if isMicWriting {
+            isMicWriting = false
+            micInput?.markAsFinished()
+            
+            let micSemaphore = DispatchSemaphore(value: 0)
+            
+            micWriter?.finishWriting {
+                log.log("✅ Final mic chunk \(currentIndex) saved")
+                micSemaphore.signal()
+            }
+            
+            _ = micSemaphore.wait(timeout: .now() + 5.0)
+        }
+        
+        // Upload both video and mic in single request
+        uploadChunk(videoURL: chunkURL, micURL: micURL, chunkIndex: currentIndex, isFinal: true)
+        
+        chunkIndex += 1
         
         mergeChunksToSingleVideo()
     }
@@ -632,20 +753,33 @@ class SampleHandler: RPBroadcastSampleHandler {
     
     // MARK: - Upload
     
-    private func uploadChunk(fileURL: URL, chunkIndex: Int, isFinal: Bool) {
+    private func uploadChunk(videoURL: URL?, micURL: URL?, chunkIndex: Int, isFinal: Bool) {
         let log = ExtensionLogger.shared
         
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        log.log("========== UPLOAD CHUNK \(chunkIndex) ==========")
+        
+        // At minimum we need video file
+        guard let videoURL = videoURL, FileManager.default.fileExists(atPath: videoURL.path) else {
+            log.log("⚠️ No video file to upload for chunk \(chunkIndex)")
+            return
+        }
         
         guard let tenantId = tenantId,
               let campaignId = campaignId,
               let taskId = taskId,
               let stepId = stepId,
               let recordingId = recordingId else {
+            log.log("⚠️ Missing task params - skipping upload")
             return
         }
         
-        guard let url = URL(string: "\(apiBaseUrl)\(uploadEndpoint)") else { return }
+        let fullURL = "\(apiBaseUrl)\(uploadEndpoint)"
+        guard let url = URL(string: fullURL) else { 
+            log.log("❌ Invalid URL: \(fullURL)")
+            return 
+        }
+        
+        log.log("📍 URL: \(fullURL)")
         
         let boundary = UUID().uuidString
         var request = URLRequest(url: url)
@@ -654,15 +788,42 @@ class SampleHandler: RPBroadcastSampleHandler {
         request.timeoutInterval = 60
         
         var body = Data()
+        var videoSize: Int = 0
+        var micSize: Int = 0
         
-        if let fileData = try? Data(contentsOf: fileURL) {
+        // Required: video file (name="file")
+        if let videoData = try? Data(contentsOf: videoURL) {
+            videoSize = videoData.count
             body.append("--\(boundary)\r\n".data(using: .utf8)!)
             body.append("Content-Disposition: form-data; name=\"file\"; filename=\"chunk_\(chunkIndex).mp4\"\r\n".data(using: .utf8)!)
             body.append("Content-Type: video/mp4\r\n\r\n".data(using: .utf8)!)
-            body.append(fileData)
+            body.append(videoData)
             body.append("\r\n".data(using: .utf8)!)
         }
         
+        // Optional: mic audio (name="mic_file")
+        var hasMic = false
+        if let micURL = micURL, FileManager.default.fileExists(atPath: micURL.path),
+           let micData = try? Data(contentsOf: micURL), micData.count > 0 {
+            micSize = micData.count
+            hasMic = true
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"mic_file\"; filename=\"human_\(chunkIndex).m4a\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: audio/mp4\r\n\r\n".data(using: .utf8)!)
+            body.append(micData)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        
+        // Log file sizes
+        log.log("📦 FILES:")
+        log.log("   file: chunk_\(chunkIndex).mp4 → \(videoSize / 1024) KB")
+        if hasMic {
+            log.log("   mic_file: human_\(chunkIndex).m4a → \(micSize / 1024) KB")
+        } else {
+            log.log("   mic_file: NOT INCLUDED (no mic data)")
+        }
+        
+        // Metadata fields
         let fields: [String: String] = [
             "tenant_id": tenantId,
             "campaign_id": campaignId,
@@ -673,7 +834,10 @@ class SampleHandler: RPBroadcastSampleHandler {
             "is_final": String(isFinal)
         ]
         
+        // Log metadata
+        log.log("📋 METADATA:")
         for (key, value) in fields {
+            log.log("   \(key): \(value)")
             body.append("--\(boundary)\r\n".data(using: .utf8)!)
             body.append("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".data(using: .utf8)!)
             body.append("\(value)\r\n".data(using: .utf8)!)
@@ -683,16 +847,44 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         request.httpBody = body
         
+        log.log("📤 SENDING REQUEST...")
+        log.log("   Total body size: \(body.count / 1024) KB")
+        
         updateUploadStatus(chunkIndex: chunkIndex, status: "uploading")
         
+        let uploadStartTime = Date()
+        
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            if let httpResponse = response as? HTTPURLResponse,
-               httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
-                log.log("✅ Chunk \(chunkIndex) uploaded")
-                self?.updateUploadStatus(chunkIndex: chunkIndex, status: "success")
-            } else {
-                let errorMsg = error?.localizedDescription ?? "HTTP error"
-                self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: errorMsg)
+            let elapsed = Date().timeIntervalSince(uploadStartTime)
+            
+            log.log("📥 RESPONSE RECEIVED (took \(String(format: "%.2f", elapsed))s)")
+            
+            if let error = error {
+                log.log("❌ NETWORK ERROR:")
+                log.log("   \(error.localizedDescription)")
+                self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: error.localizedDescription)
+                log.log("========== UPLOAD FAILED ==========")
+                return
+            }
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                log.log("📊 HTTP Status: \(httpResponse.statusCode)")
+                
+                // Log response body
+                if let data = data {
+                    let responseBody = String(data: data, encoding: .utf8) ?? "<binary data>"
+                    log.log("📄 Response Body: \(responseBody)")
+                }
+                
+                if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+                    log.log("✅ SUCCESS! Chunk \(chunkIndex) uploaded successfully")
+                    self?.updateUploadStatus(chunkIndex: chunkIndex, status: "success")
+                    log.log("========== UPLOAD SUCCESS ==========")
+                } else {
+                    log.log("❌ HTTP ERROR: Status \(httpResponse.statusCode)")
+                    self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: "HTTP \(httpResponse.statusCode)")
+                    log.log("========== UPLOAD FAILED ==========")
+                }
             }
         }
         
