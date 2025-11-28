@@ -1,41 +1,126 @@
 import { NativeModules, Platform } from 'react-native';
 
+interface PermissionsResult {
+  microphone: boolean;
+  photoLibrary: boolean;
+}
+
+interface PermissionsStatus {
+  microphone: boolean;
+  microphoneStatus: number;
+  photoLibrary: boolean;
+  photoLibraryStatus: number;
+}
+
+interface PendingVideo {
+  path: string;
+  filename: string;
+  size: number;
+}
+
+interface UploadStatus {
+  chunkIndex: number;
+  status: string;
+  error: string;
+  timestamp: number;
+  chunksUploaded: number;
+  recordingId: string;
+}
+
+interface TaskParams {
+  tenantId?: string;
+  campaignId?: string;
+  campaignName?: string;
+  stepId?: string;
+  taskId?: string;
+  apiBaseUrl?: string;
+}
+
 interface ScreenCaptureNativeModule {
+  // Permissions
+  requestMicrophonePermission: () => Promise<boolean>;
+  requestPhotoLibraryPermission: () => Promise<boolean>;
+  requestAllPermissions: () => Promise<PermissionsResult>;
+  checkPermissions: () => Promise<PermissionsStatus>;
+  
+  // Video Saving
+  checkPendingVideo: () => Promise<PendingVideo | null>;
+  savePendingVideoToPhotos: () => Promise<boolean>;
+  
+  // Broadcast Control
   startBroadcast: () => Promise<void>;
   stopBroadcast: () => Promise<void>;
   isRecording: () => Promise<boolean>;
+  
+  // Task Parameters
+  setTaskParams: (params: TaskParams) => Promise<boolean>;
+  clearTaskParams: () => Promise<boolean>;
+  setChunkDuration: (seconds: number) => Promise<boolean>;
+  getUploadStatus: () => Promise<UploadStatus | null>;
 }
 
 // Mock implementation for when native module is not available
 const MockScreenCapture: ScreenCaptureNativeModule = {
+  requestMicrophonePermission: async () => {
+    console.warn('[ScreenCapture] Mock: requestMicrophonePermission');
+    return true;
+  },
+  requestPhotoLibraryPermission: async () => {
+    console.warn('[ScreenCapture] Mock: requestPhotoLibraryPermission');
+    return true;
+  },
+  requestAllPermissions: async () => {
+    console.warn('[ScreenCapture] Mock: requestAllPermissions');
+    return { microphone: true, photoLibrary: true };
+  },
+  checkPermissions: async () => {
+    console.warn('[ScreenCapture] Mock: checkPermissions');
+    return { microphone: true, microphoneStatus: 3, photoLibrary: true, photoLibraryStatus: 3 };
+  },
+  checkPendingVideo: async () => {
+    console.warn('[ScreenCapture] Mock: checkPendingVideo');
+    return null;
+  },
+  savePendingVideoToPhotos: async () => {
+    console.warn('[ScreenCapture] Mock: savePendingVideoToPhotos');
+    return false;
+  },
   startBroadcast: async () => {
-    if (__DEV__) {
-      console.warn('[ScreenCapture] Mock: startBroadcast called');
-    }
-    return Promise.resolve();
+    console.warn('[ScreenCapture] Mock: startBroadcast');
   },
   stopBroadcast: async () => {
-    if (__DEV__) {
-      console.warn('[ScreenCapture] Mock: stopBroadcast called');
-    }
-    return Promise.resolve();
+    console.warn('[ScreenCapture] Mock: stopBroadcast');
   },
   isRecording: async () => {
-    if (__DEV__) {
-      console.warn('[ScreenCapture] Mock: isRecording called');
-    }
-    return Promise.resolve(false);
+    console.warn('[ScreenCapture] Mock: isRecording');
+    return false;
+  },
+  setTaskParams: async () => {
+    console.warn('[ScreenCapture] Mock: setTaskParams');
+    return true;
+  },
+  clearTaskParams: async () => {
+    console.warn('[ScreenCapture] Mock: clearTaskParams');
+    return true;
+  },
+  setChunkDuration: async () => {
+    console.warn('[ScreenCapture] Mock: setChunkDuration');
+    return true;
+  },
+  getUploadStatus: async () => {
+    console.warn('[ScreenCapture] Mock: getUploadStatus');
+    return null;
   },
 };
 
 const getNativeModule = (): ScreenCaptureNativeModule => {
   if (Platform.OS === 'ios') {
-    const module = NativeModules.ScreenCapture;
+    const module = NativeModules.ScreenCaptureModule;
     if (!module) {
       if (__DEV__) {
         console.warn(
           '[ScreenCapture] Native module not found. Using mock implementation. ' +
-            'Make sure to build the iOS Broadcast Extension.',
+            'Make sure to build the iOS app with Xcode.',
         );
       }
       return MockScreenCapture;
@@ -63,4 +148,3 @@ const getNativeModule = (): ScreenCaptureNativeModule => {
 const ScreenCapture = getNativeModule();
 
 export default ScreenCapture;
-

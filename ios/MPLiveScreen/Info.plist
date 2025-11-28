@@ -50,6 +50,8 @@
 	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record your voice during screen capture for voice calls and narration</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save your screen recordings to Photos for easy access and sharing</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>
