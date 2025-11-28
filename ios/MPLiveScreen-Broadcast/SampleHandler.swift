@@ -19,43 +19,9 @@ class ExtensionLogger {
     
     private var logFileURL: URL? {
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
-            NSLog("[ExtensionLogger] ERROR: Cannot get container URL for app group: \(appGroup)")
             return nil
         }
         return containerURL.appendingPathComponent(logFileName)
-    }
-    
-    init() {
-        writeSync("ExtensionLogger initialized")
-    }
-    
-    func writeSync(_ message: String) {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        let logLine = "[\(timestamp)] \(message)\n"
-        
-        NSLog("[BroadcastExtension] \(message)")
-        
-        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
-            NSLog("[ExtensionLogger] CRITICAL: App Group not accessible!")
-            return
-        }
-        
-        let fileURL = containerURL.appendingPathComponent(logFileName)
-        
-        do {
-            if FileManager.default.fileExists(atPath: fileURL.path) {
-                let handle = try FileHandle(forWritingTo: fileURL)
-                handle.seekToEndOfFile()
-                if let data = logLine.data(using: .utf8) {
-                    handle.write(data)
-                }
-                handle.closeFile()
-            } else {
-                try logLine.write(to: fileURL, atomically: true, encoding: .utf8)
-            }
-        } catch {
-            NSLog("[ExtensionLogger] Write error: \(error)")
-        }
     }
     
     func log(_ message: String) {
@@ -84,7 +50,7 @@ class ExtensionLogger {
                     try logLine.write(to: fileURL, atomically: true, encoding: .utf8)
                 }
             } catch {
-                NSLog("[BroadcastExtension] Failed to write log: \(error)")
+                // Ignore logging errors
             }
         }
     }
@@ -126,8 +92,13 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var videoInput: AVAssetWriterInput?
     private var audioInput: AVAssetWriterInput?
     private var currentChunkURL: URL?
+    private var isWriterConfigured = false
     private var isWriting = false
-    private var sessionStartTime: CMTime?  // Track first sample time for offset
+    
+    // Store first samples to configure writer
+    private var pendingVideoSample: CMSampleBuffer?
+    private var pendingAudioSample: CMSampleBuffer?
+    private var videoSize: CGSize = .zero
     
     // MARK: - Chunk URLs for merging
     private var completedChunkURLs: [URL] = []
@@ -143,11 +114,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         super.init()
         
-        let log = ExtensionLogger.shared
-        log.log("========================================")
-        log.log("🚀 EXTENSION INIT - SampleHandler created")
-        log.log("========================================")
-        
+        ExtensionLogger.shared.log("🚀 Extension initialized")
         loadTaskParams()
     }
     
@@ -167,8 +134,6 @@ class SampleHandler: RPBroadcastSampleHandler {
         if savedDuration > 0 {
             chunkDuration = savedDuration
         }
-        
-        NSLog("[BroadcastExtension] Config: apiBaseUrl=\(apiBaseUrl), chunkDuration=\(chunkDuration)s")
     }
     
     private func updateUploadStatus(chunkIndex: Int, status: String, error: String? = nil) {
@@ -193,9 +158,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         let log = ExtensionLogger.shared
         log.clear()
         
-        log.log("*******************************************")
         log.log("🎬 BROADCAST STARTED!")
-        log.log("*******************************************")
         
         recordingId = UUID().uuidString
         startTime = Date()
@@ -203,19 +166,22 @@ class SampleHandler: RPBroadcastSampleHandler {
         chunkIndex = 0
         frameCount = 0
         completedChunkURLs = []
+        isWriterConfigured = false
+        pendingVideoSample = nil
+        pendingAudioSample = nil
         
         log.log("Recording ID: \(recordingId ?? "unknown")")
-        log.log("Task params: tenant=\(tenantId ?? "nil"), campaign=\(campaignId ?? "nil"), task=\(taskId ?? "nil")")
+        log.log("Task: tenant=\(tenantId ?? "nil"), campaign=\(campaignId ?? "nil"), task=\(taskId ?? "nil")")
         
-        startNewChunk()
+        prepareNewChunk()
     }
     
     override func broadcastPaused() {
-        NSLog("[BroadcastExtension] ⏸️ Broadcast paused")
+        ExtensionLogger.shared.log("⏸️ Paused")
     }
     
     override func broadcastResumed() {
-        NSLog("[BroadcastExtension] ▶️ Broadcast resumed")
+        ExtensionLogger.shared.log("▶️ Resumed")
     }
     
     override func broadcastFinished() {
@@ -224,72 +190,50 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         log.log("🛑 Broadcast finished - duration: \(String(format: "%.1f", duration))s, frames: \(frameCount)")
         
-        // Finalize last chunk synchronously
         finalizeLastChunkAndMerge()
-    }
-    
-    private func finalizeLastChunkAndMerge() {
-        let log = ExtensionLogger.shared
-        log.log("📦 Finalizing last chunk...")
-        
-        guard isWriting else {
-            log.log("⚠️ Not writing - proceeding to merge")
-            mergeChunksToSingleVideo()
-            return
-        }
-        isWriting = false
-        
-        videoInput?.markAsFinished()
-        audioInput?.markAsFinished()
-        
-        let currentIndex = chunkIndex
-        let chunkURL = currentChunkURL
-        
-        // Use semaphore to wait for finishWriting to complete
-        let semaphore = DispatchSemaphore(value: 0)
-        
-        assetWriter?.finishWriting { [weak self] in
-            guard let self = self, let url = chunkURL else {
-                log.log("❌ finishWriting failed")
-                semaphore.signal()
-                return
-            }
-            
-            if FileManager.default.fileExists(atPath: url.path) {
-                self.completedChunkURLs.append(url)
-                log.log("✅ Final chunk \(currentIndex) saved")
-            }
-            
-            // Upload last chunk (don't wait for it)
-            self.uploadChunk(fileURL: url, chunkIndex: currentIndex, isFinal: true)
-            
-            semaphore.signal()
-        }
-        
-        // Wait up to 5 seconds for finalization
-        let result = semaphore.wait(timeout: .now() + 5.0)
-        if result == .timedOut {
-            log.log("⚠️ Finalization timed out, proceeding with available chunks")
-        }
-        
-        chunkIndex += 1
-        
-        // Now merge synchronously
-        mergeChunksToSingleVideo()
     }
     
     // MARK: - Sample Processing
     
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
-        guard isWriting, let writer = assetWriter, writer.status == .writing else { return }
-        
-        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        
-        // Start session with first sample's timestamp
-        if sessionStartTime == nil {
-            sessionStartTime = timestamp
-            writer.startSession(atSourceTime: timestamp)
+        // If writer not configured yet, store samples and configure
+        if !isWriterConfigured {
+            switch sampleBufferType {
+            case .video:
+                if pendingVideoSample == nil {
+                    pendingVideoSample = sampleBuffer
+                    // Get video dimensions
+                    if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
+                        let dimensions = CMVideoFormatDescriptionGetDimensions(formatDesc)
+                        videoSize = CGSize(width: CGFloat(dimensions.width), height: CGFloat(dimensions.height))
+                        ExtensionLogger.shared.log("Video size: \(Int(videoSize.width))x\(Int(videoSize.height))")
+                    }
+                }
+        case .audioApp:
+            // Only capture app/system audio (consistent format)
+            // Mixing audioApp + audioMic causes format mismatch and distortion
+            if pendingAudioSample == nil {
+                pendingAudioSample = sampleBuffer
+            }
+        case .audioMic:
+            // Skip mic audio - format differs from app audio
+            break
+            @unknown default:
+                break
+            }
+            
+            // Once we have both, configure the writer
+            if pendingVideoSample != nil && pendingAudioSample != nil {
+                configureAndStartWriter()
+            } else if pendingVideoSample != nil {
+                // Start without audio after a short delay (some recordings have no audio)
+                configureAndStartWriter()
+            }
+            return
         }
+        
+        // Normal processing
+        guard isWriting, let writer = assetWriter, writer.status == .writing else { return }
         
         switch sampleBufferType {
         case .video:
@@ -298,16 +242,90 @@ class SampleHandler: RPBroadcastSampleHandler {
                 input.append(sampleBuffer)
             }
             
-        case .audioApp, .audioMic:
+        case .audioApp:
+            // Only process app audio (system sounds, media playback)
             if let input = audioInput, input.isReadyForMoreMediaData {
                 input.append(sampleBuffer)
             }
+        case .audioMic:
+            // Skip mic - different format causes distortion
+            break
             
         @unknown default:
             break
         }
         
         checkChunkDuration()
+    }
+    
+    private func configureAndStartWriter() {
+        guard let writer = assetWriter else { return }
+        
+        let log = ExtensionLogger.shared
+        
+        // Configure video input with detected dimensions
+        let width = videoSize.width > 0 ? Int(videoSize.width) : 1080
+        let height = videoSize.height > 0 ? Int(videoSize.height) : 1920
+        
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: 6000000,
+                AVVideoMaxKeyFrameIntervalKey: 60
+            ]
+        ]
+        
+        videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        videoInput?.expectsMediaDataInRealTime = true
+        
+        if let videoInput = videoInput, writer.canAdd(videoInput) {
+            writer.add(videoInput)
+        }
+        
+        // Audio: Encode to AAC matching audioApp format (44100 Hz stereo)
+        // Only audioApp is captured (audioMic is skipped) so format is consistent
+        let audioSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 44100.0,
+            AVNumberOfChannelsKey: 2,
+            AVEncoderBitRateKey: 128000
+        ]
+        
+        audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+        audioInput?.expectsMediaDataInRealTime = true
+        
+        if let audioInput = audioInput, writer.canAdd(audioInput) {
+            writer.add(audioInput)
+            log.log("Audio: 44100 Hz stereo (app audio only)")
+        }
+        
+        // Start writing
+        writer.startWriting()
+        
+        // Start session with first video sample's timestamp
+        if let videoSample = pendingVideoSample {
+            let timestamp = CMSampleBufferGetPresentationTimeStamp(videoSample)
+            writer.startSession(atSourceTime: timestamp)
+            
+            // Write pending samples
+            if let input = videoInput, input.isReadyForMoreMediaData {
+                input.append(videoSample)
+                frameCount += 1
+            }
+        }
+        
+        if let audioSample = pendingAudioSample, let input = audioInput, input.isReadyForMoreMediaData {
+            input.append(audioSample)
+        }
+        
+        isWriterConfigured = true
+        isWriting = true
+        pendingVideoSample = nil
+        pendingAudioSample = nil
+        
+        log.log("Writer configured: \(width)x\(height)")
     }
     
     // MARK: - Chunk Management
@@ -317,14 +335,14 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         if Date().timeIntervalSince(lastChunk) >= chunkDuration {
             finalizeCurrentChunk(isFinal: false)
-            startNewChunk()
+            prepareNewChunk()
             lastChunkTime = Date()
         }
     }
     
-    private func startNewChunk() {
+    private func prepareNewChunk() {
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
-            NSLog("[BroadcastExtension] ❌ Failed to get App Group container")
+            ExtensionLogger.shared.log("❌ No App Group container")
             return
         }
         
@@ -340,47 +358,14 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         do {
             assetWriter = try AVAssetWriter(url: url, fileType: .mp4)
+            isWriterConfigured = false
+            isWriting = false
+            pendingVideoSample = nil
+            pendingAudioSample = nil
             
-            let videoSettings: [String: Any] = [
-                AVVideoCodecKey: AVVideoCodecType.h264,
-                AVVideoWidthKey: 1080,
-                AVVideoHeightKey: 1920,
-                AVVideoCompressionPropertiesKey: [
-                    AVVideoAverageBitRateKey: 6000000,
-                    AVVideoMaxKeyFrameIntervalKey: 60
-                ]
-            ]
-            
-            videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
-            videoInput?.expectsMediaDataInRealTime = true
-            
-            let audioSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 44100,
-                AVNumberOfChannelsKey: 2,
-                AVEncoderBitRateKey: 128000
-            ]
-            
-            audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
-            audioInput?.expectsMediaDataInRealTime = true
-            
-            if let videoInput = videoInput, assetWriter?.canAdd(videoInput) == true {
-                assetWriter?.add(videoInput)
-            }
-            
-            if let audioInput = audioInput, assetWriter?.canAdd(audioInput) == true {
-                assetWriter?.add(audioInput)
-            }
-            
-            assetWriter?.startWriting()
-            // Don't call startSession here - we'll call it with the first sample's timestamp
-            sessionStartTime = nil  // Reset for new chunk
-            isWriting = true
-            
-            NSLog("[BroadcastExtension] Started chunk \(chunkIndex)")
-            
+            NSLog("[BroadcastExtension] Prepared chunk \(chunkIndex)")
         } catch {
-            NSLog("[BroadcastExtension] Failed to create asset writer: \(error)")
+            NSLog("[BroadcastExtension] Failed to create writer: \(error)")
         }
     }
     
@@ -394,42 +379,79 @@ class SampleHandler: RPBroadcastSampleHandler {
         let currentIndex = chunkIndex
         let chunkURL = currentChunkURL
         
+        let semaphore = DispatchSemaphore(value: 0)
+        
         assetWriter?.finishWriting { [weak self] in
-            guard let self = self, let url = chunkURL else { return }
-            
-            if FileManager.default.fileExists(atPath: url.path) {
-                self.completedChunkURLs.append(url)
-                NSLog("[BroadcastExtension] ✅ Chunk \(currentIndex) finalized")
+            if let url = chunkURL, FileManager.default.fileExists(atPath: url.path) {
+                self?.completedChunkURLs.append(url)
             }
-            
-            self.uploadChunk(fileURL: url, chunkIndex: currentIndex, isFinal: isFinal)
+            semaphore.signal()
+        }
+        
+        _ = semaphore.wait(timeout: .now() + 5.0)
+        
+        // Upload chunk
+        if let url = chunkURL {
+            uploadChunk(fileURL: url, chunkIndex: currentIndex, isFinal: isFinal)
         }
         
         chunkIndex += 1
     }
     
-    // MARK: - Merge Chunks (Main app will save to Photos)
+    private func finalizeLastChunkAndMerge() {
+        let log = ExtensionLogger.shared
+        log.log("📦 Finalizing...")
+        
+        if isWriting {
+            isWriting = false
+            videoInput?.markAsFinished()
+            audioInput?.markAsFinished()
+            
+            let currentIndex = chunkIndex
+            let chunkURL = currentChunkURL
+            
+            let semaphore = DispatchSemaphore(value: 0)
+            
+            assetWriter?.finishWriting { [weak self] in
+                if let url = chunkURL, FileManager.default.fileExists(atPath: url.path) {
+                    self?.completedChunkURLs.append(url)
+                    log.log("✅ Final chunk \(currentIndex) saved")
+                }
+                semaphore.signal()
+            }
+            
+            _ = semaphore.wait(timeout: .now() + 5.0)
+            
+            if let url = chunkURL {
+                uploadChunk(fileURL: url, chunkIndex: currentIndex, isFinal: true)
+            }
+            
+            chunkIndex += 1
+        }
+        
+        mergeChunksToSingleVideo()
+    }
+    
+    // MARK: - Merge Chunks
     
     private func mergeChunksToSingleVideo() {
         let log = ExtensionLogger.shared
         log.log("📼 Merging \(completedChunkURLs.count) chunks...")
         
         guard !completedChunkURLs.isEmpty else {
-            log.log("⚠️ No chunks to merge")
+            log.log("⚠️ No chunks")
             return
         }
         
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
-            log.log("❌ Failed to get App Group container")
+            log.log("❌ No container")
             return
         }
         
         let sortedChunks = completedChunkURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }
-        log.log("Chunks to merge: \(sortedChunks.count)")
         
-        // If only one chunk, just copy it directly
+        // If only one chunk, just copy it
         if sortedChunks.count == 1 {
-            log.log("Single chunk - copying directly")
             copyChunkAsOutput(sortedChunks[0], to: containerURL)
             return
         }
@@ -442,12 +464,10 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         try? FileManager.default.removeItem(at: mergedURL)
         
-        log.log("Output: \(mergedURL.lastPathComponent)")
-        
         let composition = AVMutableComposition()
         
         guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            log.log("❌ Failed to create video track - falling back to copy")
+            log.log("❌ No video track - fallback")
             copyChunkAsOutput(sortedChunks.last!, to: containerURL)
             return
         }
@@ -458,27 +478,20 @@ class SampleHandler: RPBroadcastSampleHandler {
         var successCount = 0
         
         for chunkURL in sortedChunks {
-            // Verify chunk exists
-            guard FileManager.default.fileExists(atPath: chunkURL.path) else {
-                log.log("⚠️ Chunk not found: \(chunkURL.lastPathComponent)")
-                continue
-            }
+            guard FileManager.default.fileExists(atPath: chunkURL.path) else { continue }
             
             let asset = AVURLAsset(url: chunkURL, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
             
-            // Check if asset has video
-            guard let assetVideoTrack = asset.tracks(withMediaType: .video).first else {
-                log.log("⚠️ No video track in: \(chunkURL.lastPathComponent)")
-                continue
-            }
+            guard let assetVideoTrack = asset.tracks(withMediaType: .video).first else { continue }
             
-            // Get duration - validate it's reasonable (< 1 hour per chunk)
-            var duration = asset.duration
+            // Get actual duration from video track
+            let trackDuration = assetVideoTrack.timeRange.duration
+            var duration = trackDuration
+            
+            // Validate duration
             let durationSeconds = CMTimeGetSeconds(duration)
-            
-            if durationSeconds <= 0 || durationSeconds > 3600 || durationSeconds.isNaN {
-                log.log("⚠️ Invalid duration \(durationSeconds)s for \(chunkURL.lastPathComponent), using 5s")
-                duration = CMTime(seconds: 5.0, preferredTimescale: 600)
+            if durationSeconds <= 0 || durationSeconds > 60 || durationSeconds.isNaN {
+                duration = CMTime(seconds: chunkDuration, preferredTimescale: 600)
             }
             
             do {
@@ -492,38 +505,29 @@ class SampleHandler: RPBroadcastSampleHandler {
                 
                 currentTime = CMTimeAdd(currentTime, duration)
                 successCount += 1
-                log.log("Added: \(chunkURL.lastPathComponent) (\(String(format: "%.1f", durationSeconds))s)")
             } catch {
-                log.log("⚠️ Failed: \(error.localizedDescription)")
+                log.log("⚠️ Chunk error: \(error.localizedDescription)")
             }
         }
         
         if successCount == 0 {
-            log.log("❌ No chunks added - falling back to copy")
+            log.log("❌ No chunks merged - fallback")
             copyChunkAsOutput(sortedChunks.last!, to: containerURL)
             return
         }
         
-        let totalDuration = CMTimeGetSeconds(currentTime)
-        log.log("Total duration: \(String(format: "%.1f", totalDuration))s from \(successCount) chunks")
+        log.log("Merged \(successCount) chunks, duration: \(String(format: "%.1f", CMTimeGetSeconds(currentTime)))s")
         
-        // Validate total duration
-        if totalDuration <= 0 || totalDuration > 7200 {
-            log.log("❌ Invalid total duration - falling back to copy")
-            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
-            return
-        }
-        
-        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
-            log.log("❌ Failed to create exporter - falling back to copy")
+        // Use MediumQuality to re-encode and handle format differences between chunks
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetMediumQuality) else {
+            log.log("❌ No exporter - fallback")
             copyChunkAsOutput(sortedChunks.last!, to: containerURL)
             return
         }
         
         exporter.outputURL = mergedURL
         exporter.outputFileType = .mp4
-        
-        log.log("Starting export...")
+        exporter.shouldOptimizeForNetworkUse = false
         
         let semaphore = DispatchSemaphore(value: 0)
         var exportSuccess = false
@@ -536,25 +540,17 @@ class SampleHandler: RPBroadcastSampleHandler {
             semaphore.signal()
         }
         
-        let result = semaphore.wait(timeout: .now() + 60.0)
-        
-        if result == .timedOut {
-            log.log("⚠️ Export timed out - falling back to copy")
-            exporter.cancelExport()
-            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
-            return
-        }
+        _ = semaphore.wait(timeout: .now() + 60.0)
         
         if exportSuccess {
             if let attrs = try? FileManager.default.attributesOfItem(atPath: mergedURL.path),
                let size = attrs[.size] as? Int64 {
-                log.log("✅ Merged video: \(size / 1024) KB")
+                log.log("✅ Merged: \(size / 1024) KB")
             }
-            
             setVideoReadyFlag(path: mergedURL.path)
             cleanupChunks()
         } else {
-            log.log("❌ Export failed - falling back to copy")
+            log.log("❌ Export failed - fallback")
             copyChunkAsOutput(sortedChunks.last!, to: containerURL)
         }
     }
@@ -575,27 +571,24 @@ class SampleHandler: RPBroadcastSampleHandler {
             
             if let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path),
                let size = attrs[.size] as? Int64 {
-                log.log("✅ Copied chunk as output: \(size / 1024) KB")
+                log.log("✅ Copied: \(size / 1024) KB")
             }
             
             setVideoReadyFlag(path: outputURL.path)
             cleanupChunks()
         } catch {
-            log.log("❌ Failed to copy: \(error.localizedDescription)")
+            log.log("❌ Copy failed: \(error.localizedDescription)")
             cleanupChunks()
         }
     }
     
     private func setVideoReadyFlag(path: String) {
-        let log = ExtensionLogger.shared
-        
         if let defaults = UserDefaults(suiteName: appGroup) {
             defaults.set(true, forKey: "pendingVideoReady")
             defaults.set(path, forKey: "pendingVideoPath")
             defaults.set(Date().timeIntervalSince1970, forKey: "pendingVideoTimestamp")
             defaults.synchronize()
-            log.log("✅ Video ready flag set")
-            log.log("📱 Main app will save to Photos")
+            ExtensionLogger.shared.log("📱 Ready for Photos")
         }
     }
     
@@ -605,7 +598,6 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
         completedChunkURLs = []
         
-        // Clean up chunks directory
         if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) {
             let chunksDir = containerURL.appendingPathComponent("chunks")
             try? FileManager.default.removeItem(at: chunksDir)
@@ -617,24 +609,17 @@ class SampleHandler: RPBroadcastSampleHandler {
     private func uploadChunk(fileURL: URL, chunkIndex: Int, isFinal: Bool) {
         let log = ExtensionLogger.shared
         
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            log.log("⚠️ Chunk file not found for upload")
-            return
-        }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         
         guard let tenantId = tenantId,
               let campaignId = campaignId,
               let taskId = taskId,
               let stepId = stepId,
               let recordingId = recordingId else {
-            log.log("⚠️ Missing params - skipping upload (chunks will still be merged)")
             return
         }
         
-        guard let url = URL(string: "\(apiBaseUrl)\(uploadEndpoint)") else {
-            log.log("❌ Invalid URL")
-            return
-        }
+        guard let url = URL(string: "\(apiBaseUrl)\(uploadEndpoint)") else { return }
         
         let boundary = UUID().uuidString
         var request = URLRequest(url: url)
@@ -675,21 +660,13 @@ class SampleHandler: RPBroadcastSampleHandler {
         updateUploadStatus(chunkIndex: chunkIndex, status: "uploading")
         
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            if let error = error {
-                log.log("❌ Upload failed: \(error.localizedDescription)")
-                self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: error.localizedDescription)
-                return
-            }
-            
-            if let httpResponse = response as? HTTPURLResponse {
-                if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
-                    log.log("✅ Chunk \(chunkIndex) uploaded")
-                    self?.updateUploadStatus(chunkIndex: chunkIndex, status: "success")
-                } else {
-                    let responseText = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                    log.log("❌ Upload error: HTTP \(httpResponse.statusCode)")
-                    self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: "HTTP \(httpResponse.statusCode)")
-                }
+            if let httpResponse = response as? HTTPURLResponse,
+               httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+                log.log("✅ Chunk \(chunkIndex) uploaded")
+                self?.updateUploadStatus(chunkIndex: chunkIndex, status: "success")
+            } else {
+                let errorMsg = error?.localizedDescription ?? "HTTP error"
+                self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: errorMsg)
             }
         }
         
