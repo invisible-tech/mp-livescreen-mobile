@@ -9,6 +9,7 @@
 import ReplayKit
 import Foundation
 import AVFoundation
+import Photos
 
 // MARK: - File Logger for Extension Debugging
 class ExtensionLogger {
@@ -135,6 +136,11 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var currentChunkURL: URL?
     private var isWriting = false
     
+    // MARK: - Chunk URLs for merging
+    private var completedChunkURLs: [URL] = []
+    private var pendingUploads: Int = 0
+    private let uploadQueue = DispatchQueue(label: "com.mplivescreen.upload", qos: .utility)
+    
     // MARK: - Initialization
     
     override init() {
@@ -226,6 +232,8 @@ class SampleHandler: RPBroadcastSampleHandler {
         lastChunkTime = Date()
         chunkIndex = 0
         frameCount = 0
+        completedChunkURLs = []
+        pendingUploads = 0
         
         log.log("✅ Recording initialized")
         log.log("Recording ID: \(recordingId ?? "unknown")")
@@ -263,14 +271,21 @@ class SampleHandler: RPBroadcastSampleHandler {
     }
     
     override func broadcastFinished() {
+        let log = ExtensionLogger.shared
         let duration = startTime.map { Date().timeIntervalSince($0) } ?? 0
-        NSLog("[BroadcastExtension] 🛑 Broadcast finished")
-        NSLog("[BroadcastExtension] Total duration: \(String(format: "%.1f", duration))s")
-        NSLog("[BroadcastExtension] Total frames: \(frameCount)")
-        NSLog("[BroadcastExtension] Total chunks: \(chunkIndex + 1)")
+        
+        log.log("🛑 Broadcast finished")
+        log.log("Total duration: \(String(format: "%.1f", duration))s")
+        log.log("Total frames: \(frameCount)")
+        log.log("Total chunks: \(chunkIndex + 1)")
         
         // Finalize and upload last chunk
         finalizeCurrentChunk(isFinal: true)
+        
+        // Wait a moment for uploads to start, then merge and save
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.mergeAndSaveToPhotos()
+        }
     }
     
     // MARK: - Sample Processing
@@ -329,10 +344,17 @@ class SampleHandler: RPBroadcastSampleHandler {
     }
     
     private func startNewChunk() {
-        // Create temp file for chunk
-        let tempDir = FileManager.default.temporaryDirectory
-        let chunkFileName = "chunk_\(chunkIndex).mp4"
-        currentChunkURL = tempDir.appendingPathComponent(chunkFileName)
+        // Use App Group container for chunks so they persist
+        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
+            NSLog("[BroadcastExtension] ❌ Failed to get App Group container")
+            return
+        }
+        
+        let chunksDir = containerURL.appendingPathComponent("chunks")
+        try? FileManager.default.createDirectory(at: chunksDir, withIntermediateDirectories: true)
+        
+        let chunkFileName = "chunk_\(recordingId ?? "unknown")_\(chunkIndex).mp4"
+        currentChunkURL = chunksDir.appendingPathComponent(chunkFileName)
         
         guard let url = currentChunkURL else { return }
         
@@ -379,7 +401,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             assetWriter?.startSession(atSourceTime: .zero)
             isWriting = true
             
-            NSLog("[BroadcastExtension] Started chunk \(chunkIndex)")
+            NSLog("[BroadcastExtension] Started chunk \(chunkIndex) at \(url.path)")
             
         } catch {
             NSLog("[BroadcastExtension] Failed to create asset writer: \(error)")
@@ -429,6 +451,8 @@ class SampleHandler: RPBroadcastSampleHandler {
                    let size = attrs[.size] as? Int64 {
                     NSLog("[BroadcastExtension] File size: \(size) bytes (\(size / 1024) KB)")
                 }
+                // Save URL for later merging
+                self.completedChunkURLs.append(url)
             }
             
             // Upload the chunk
@@ -437,6 +461,210 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
         
         chunkIndex += 1
+    }
+    
+    // MARK: - Merge and Save to Photos
+    
+    private func mergeAndSaveToPhotos() {
+        let log = ExtensionLogger.shared
+        log.log("📼 Starting merge and save to Photos...")
+        log.log("Chunks to merge: \(completedChunkURLs.count)")
+        
+        guard !completedChunkURLs.isEmpty else {
+            log.log("⚠️ No chunks to merge")
+            return
+        }
+        
+        // Sort chunks by index (extracted from filename)
+        let sortedChunks = completedChunkURLs.sorted { url1, url2 in
+            let name1 = url1.lastPathComponent
+            let name2 = url2.lastPathComponent
+            return name1 < name2
+        }
+        
+        log.log("Sorted chunks: \(sortedChunks.map { $0.lastPathComponent })")
+        
+        // Create merged video
+        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
+            log.log("❌ Failed to get App Group container")
+            return
+        }
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let timestamp = dateFormatter.string(from: Date())
+        let mergedFileName = "LiveCapture_\(timestamp).mp4"
+        let mergedURL = containerURL.appendingPathComponent(mergedFileName)
+        
+        // Remove existing file
+        try? FileManager.default.removeItem(at: mergedURL)
+        
+        log.log("Merging to: \(mergedURL.path)")
+        
+        // Use AVMutableComposition to merge videos
+        let composition = AVMutableComposition()
+        
+        guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            log.log("❌ Failed to create composition tracks")
+            cleanupChunks()
+            return
+        }
+        
+        var currentTime = CMTime.zero
+        var hasAudio = false
+        
+        for chunkURL in sortedChunks {
+            let asset = AVAsset(url: chunkURL)
+            
+            do {
+                // Add video track
+                if let assetVideoTrack = asset.tracks(withMediaType: .video).first {
+                    let duration = asset.duration
+                    try videoTrack.insertTimeRange(
+                        CMTimeRange(start: .zero, duration: duration),
+                        of: assetVideoTrack,
+                        at: currentTime
+                    )
+                    
+                    // Add audio track if exists
+                    if let assetAudioTrack = asset.tracks(withMediaType: .audio).first {
+                        try audioTrack.insertTimeRange(
+                            CMTimeRange(start: .zero, duration: duration),
+                            of: assetAudioTrack,
+                            at: currentTime
+                        )
+                        hasAudio = true
+                    }
+                    
+                    currentTime = CMTimeAdd(currentTime, duration)
+                    log.log("Added chunk: \(chunkURL.lastPathComponent), duration: \(CMTimeGetSeconds(duration))s")
+                }
+            } catch {
+                log.log("⚠️ Failed to add chunk \(chunkURL.lastPathComponent): \(error)")
+            }
+        }
+        
+        // Remove empty audio track if no audio was added
+        if !hasAudio {
+            composition.removeTrack(audioTrack)
+        }
+        
+        log.log("Total merged duration: \(CMTimeGetSeconds(currentTime))s")
+        
+        // Export merged video
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            log.log("❌ Failed to create export session")
+            cleanupChunks()
+            return
+        }
+        
+        exporter.outputURL = mergedURL
+        exporter.outputFileType = .mp4
+        exporter.shouldOptimizeForNetworkUse = true
+        
+        log.log("Starting export...")
+        
+        exporter.exportAsynchronously { [weak self] in
+            guard let self = self else { return }
+            
+            switch exporter.status {
+            case .completed:
+                log.log("✅ Export completed!")
+                
+                // Check file size
+                if let attrs = try? FileManager.default.attributesOfItem(atPath: mergedURL.path),
+                   let size = attrs[.size] as? Int64 {
+                    log.log("Merged file size: \(size / 1024 / 1024) MB")
+                }
+                
+                // Save to Photos
+                self.saveToPhotoLibrary(url: mergedURL)
+                
+            case .failed:
+                log.log("❌ Export failed: \(exporter.error?.localizedDescription ?? "unknown")")
+                self.cleanupChunks()
+                
+            case .cancelled:
+                log.log("⚠️ Export cancelled")
+                self.cleanupChunks()
+                
+            default:
+                log.log("⚠️ Export status: \(exporter.status.rawValue)")
+            }
+        }
+    }
+    
+    private func saveToPhotoLibrary(url: URL) {
+        let log = ExtensionLogger.shared
+        log.log("📱 Saving to Photo Library...")
+        
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { [weak self] status in
+            guard let self = self else { return }
+            
+            switch status {
+            case .authorized, .limited:
+                log.log("✅ Photo library access granted")
+                
+                PHPhotoLibrary.shared().performChanges({
+                    PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                }) { success, error in
+                    if success {
+                        log.log("🎉 Video saved to Photos successfully!")
+                        
+                        // Notify user via App Group
+                        if let defaults = UserDefaults(suiteName: self.appGroup) {
+                            defaults.set(true, forKey: "videoSavedToPhotos")
+                            defaults.set(Date().description, forKey: "videoSavedAt")
+                            defaults.synchronize()
+                        }
+                    } else {
+                        log.log("❌ Failed to save to Photos: \(error?.localizedDescription ?? "unknown")")
+                    }
+                    
+                    // Clean up merged file and chunks
+                    try? FileManager.default.removeItem(at: url)
+                    self.cleanupChunks()
+                }
+                
+            case .denied, .restricted:
+                log.log("❌ Photo library access denied")
+                // Still clean up files
+                try? FileManager.default.removeItem(at: url)
+                self.cleanupChunks()
+                
+            case .notDetermined:
+                log.log("⚠️ Photo library access not determined")
+                self.cleanupChunks()
+                
+            @unknown default:
+                log.log("⚠️ Unknown photo library status")
+                self.cleanupChunks()
+            }
+        }
+    }
+    
+    private func cleanupChunks() {
+        let log = ExtensionLogger.shared
+        log.log("🗑️ Cleaning up chunk files...")
+        
+        for url in completedChunkURLs {
+            do {
+                try FileManager.default.removeItem(at: url)
+                log.log("Deleted: \(url.lastPathComponent)")
+            } catch {
+                log.log("⚠️ Failed to delete \(url.lastPathComponent): \(error)")
+            }
+        }
+        
+        // Also clean up chunks directory
+        if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) {
+            let chunksDir = containerURL.appendingPathComponent("chunks")
+            try? FileManager.default.removeItem(at: chunksDir)
+        }
+        
+        completedChunkURLs = []
+        log.log("✅ Cleanup complete")
     }
     
     // MARK: - Upload
@@ -472,8 +700,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             log.log("  taskId: \(self.taskId ?? "NIL")")
             log.log("  stepId: \(self.stepId ?? "NIL")")
             log.log("  recordingId: \(self.recordingId ?? "NIL")")
-            // Clean up file
-            try? FileManager.default.removeItem(at: fileURL)
+            // Don't clean up - we need files for merging
             return
         }
         
@@ -550,8 +777,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             log.log("-------- RESPONSE --------")
             log.log("Request took: \(String(format: "%.2f", elapsed)) seconds")
             
-            // Clean up file after upload attempt
-            try? FileManager.default.removeItem(at: fileURL)
+            // Don't delete file here - we need it for merging
             
             if let error = error {
                 log.log("❌ NETWORK ERROR!")
