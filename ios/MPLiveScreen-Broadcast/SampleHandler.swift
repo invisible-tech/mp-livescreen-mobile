@@ -415,7 +415,14 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
         
         let sortedChunks = completedChunkURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }
-        log.log("Chunks to merge: \(sortedChunks.map { $0.lastPathComponent })")
+        log.log("Chunks to merge: \(sortedChunks.count)")
+        
+        // If only one chunk, just copy it directly
+        if sortedChunks.count == 1 {
+            log.log("Single chunk - copying directly")
+            copyChunkAsOutput(sortedChunks[0], to: containerURL)
+            return
+        }
         
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
@@ -430,106 +437,155 @@ class SampleHandler: RPBroadcastSampleHandler {
         let composition = AVMutableComposition()
         
         guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            log.log("❌ Failed to create video track")
-            cleanupChunks()
+            log.log("❌ Failed to create video track - falling back to copy")
+            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
             return
         }
         
         let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
         
         var currentTime = CMTime.zero
+        var successCount = 0
         
         for chunkURL in sortedChunks {
-            let asset = AVAsset(url: chunkURL)
+            // Verify chunk exists
+            guard FileManager.default.fileExists(atPath: chunkURL.path) else {
+                log.log("⚠️ Chunk not found: \(chunkURL.lastPathComponent)")
+                continue
+            }
+            
+            let asset = AVURLAsset(url: chunkURL, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            
+            // Check if asset has video
+            guard let assetVideoTrack = asset.tracks(withMediaType: .video).first else {
+                log.log("⚠️ No video track in: \(chunkURL.lastPathComponent)")
+                continue
+            }
+            
+            // Get duration - validate it's reasonable (< 1 hour per chunk)
+            var duration = asset.duration
+            let durationSeconds = CMTimeGetSeconds(duration)
+            
+            if durationSeconds <= 0 || durationSeconds > 3600 || durationSeconds.isNaN {
+                log.log("⚠️ Invalid duration \(durationSeconds)s for \(chunkURL.lastPathComponent), using 5s")
+                duration = CMTime(seconds: 5.0, preferredTimescale: 600)
+            }
             
             do {
-                if let assetVideoTrack = asset.tracks(withMediaType: .video).first {
-                    let duration = asset.duration
-                    try videoTrack.insertTimeRange(
-                        CMTimeRange(start: .zero, duration: duration),
-                        of: assetVideoTrack,
-                        at: currentTime
-                    )
-                    
-                    if let assetAudioTrack = asset.tracks(withMediaType: .audio).first,
-                       let audioTrack = audioTrack {
-                        try audioTrack.insertTimeRange(
-                            CMTimeRange(start: .zero, duration: duration),
-                            of: assetAudioTrack,
-                            at: currentTime
-                        )
-                    }
-                    
-                    currentTime = CMTimeAdd(currentTime, duration)
-                    log.log("Added chunk: \(chunkURL.lastPathComponent)")
+                let timeRange = CMTimeRange(start: .zero, duration: duration)
+                try videoTrack.insertTimeRange(timeRange, of: assetVideoTrack, at: currentTime)
+                
+                if let assetAudioTrack = asset.tracks(withMediaType: .audio).first,
+                   let audioTrack = audioTrack {
+                    try audioTrack.insertTimeRange(timeRange, of: assetAudioTrack, at: currentTime)
                 }
+                
+                currentTime = CMTimeAdd(currentTime, duration)
+                successCount += 1
+                log.log("Added: \(chunkURL.lastPathComponent) (\(String(format: "%.1f", durationSeconds))s)")
             } catch {
-                log.log("⚠️ Failed to add chunk: \(error.localizedDescription)")
+                log.log("⚠️ Failed: \(error.localizedDescription)")
             }
         }
         
-        log.log("Total duration: \(CMTimeGetSeconds(currentTime))s")
+        if successCount == 0 {
+            log.log("❌ No chunks added - falling back to copy")
+            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
+            return
+        }
         
-        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetMediumQuality) else {
-            log.log("❌ Failed to create exporter")
-            cleanupChunks()
+        let totalDuration = CMTimeGetSeconds(currentTime)
+        log.log("Total duration: \(String(format: "%.1f", totalDuration))s from \(successCount) chunks")
+        
+        // Validate total duration
+        if totalDuration <= 0 || totalDuration > 7200 {
+            log.log("❌ Invalid total duration - falling back to copy")
+            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
+            return
+        }
+        
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
+            log.log("❌ Failed to create exporter - falling back to copy")
+            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
             return
         }
         
         exporter.outputURL = mergedURL
         exporter.outputFileType = .mp4
-        exporter.shouldOptimizeForNetworkUse = false // Faster
         
-        log.log("Starting synchronous export...")
+        log.log("Starting export...")
         
-        // Use semaphore to make export synchronous
         let semaphore = DispatchSemaphore(value: 0)
         var exportSuccess = false
         
         exporter.exportAsynchronously {
-            switch exporter.status {
-            case .completed:
-                exportSuccess = true
-            case .failed:
-                log.log("❌ Export failed: \(exporter.error?.localizedDescription ?? "unknown")")
-            default:
-                log.log("⚠️ Export status: \(exporter.status.rawValue)")
+            exportSuccess = (exporter.status == .completed)
+            if !exportSuccess {
+                log.log("❌ Export error: \(exporter.error?.localizedDescription ?? "unknown")")
             }
             semaphore.signal()
         }
         
-        // Wait up to 30 seconds for export
-        let result = semaphore.wait(timeout: .now() + 30.0)
+        let result = semaphore.wait(timeout: .now() + 60.0)
         
         if result == .timedOut {
-            log.log("⚠️ Export timed out!")
+            log.log("⚠️ Export timed out - falling back to copy")
             exporter.cancelExport()
-            cleanupChunks()
+            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
             return
         }
         
         if exportSuccess {
             if let attrs = try? FileManager.default.attributesOfItem(atPath: mergedURL.path),
                let size = attrs[.size] as? Int64 {
-                log.log("✅ Merged video ready: \(size / 1024) KB")
+                log.log("✅ Merged video: \(size / 1024) KB")
             }
             
-            // Notify main app that video is ready
-            if let defaults = UserDefaults(suiteName: appGroup) {
-                defaults.set(true, forKey: "pendingVideoReady")
-                defaults.set(mergedURL.path, forKey: "pendingVideoPath")
-                defaults.set(Date().timeIntervalSince1970, forKey: "pendingVideoTimestamp")
-                defaults.synchronize()
-                log.log("✅ Flags set for main app")
-            }
-            
-            log.log("📱 Main app will save to Photos when opened")
-            
-            // Clean up chunks (but keep merged video!)
+            setVideoReadyFlag(path: mergedURL.path)
             cleanupChunks()
         } else {
-            log.log("❌ Export did not succeed")
+            log.log("❌ Export failed - falling back to copy")
+            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
+        }
+    }
+    
+    private func copyChunkAsOutput(_ chunkURL: URL, to containerURL: URL) {
+        let log = ExtensionLogger.shared
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let timestamp = dateFormatter.string(from: Date())
+        let outputFileName = "LiveCapture_\(timestamp).mp4"
+        let outputURL = containerURL.appendingPathComponent(outputFileName)
+        
+        try? FileManager.default.removeItem(at: outputURL)
+        
+        do {
+            try FileManager.default.copyItem(at: chunkURL, to: outputURL)
+            
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path),
+               let size = attrs[.size] as? Int64 {
+                log.log("✅ Copied chunk as output: \(size / 1024) KB")
+            }
+            
+            setVideoReadyFlag(path: outputURL.path)
             cleanupChunks()
+        } catch {
+            log.log("❌ Failed to copy: \(error.localizedDescription)")
+            cleanupChunks()
+        }
+    }
+    
+    private func setVideoReadyFlag(path: String) {
+        let log = ExtensionLogger.shared
+        
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            defaults.set(true, forKey: "pendingVideoReady")
+            defaults.set(path, forKey: "pendingVideoPath")
+            defaults.set(Date().timeIntervalSince1970, forKey: "pendingVideoTimestamp")
+            defaults.synchronize()
+            log.log("✅ Video ready flag set")
+            log.log("📱 Main app will save to Photos")
         }
     }
     
