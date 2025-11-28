@@ -354,14 +354,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
             videoInput?.expectsMediaDataInRealTime = true
             
-            let audioSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 44100,
-                AVNumberOfChannelsKey: 2,
-                AVEncoderBitRateKey: 128000
-            ]
-            
-            audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            // Use nil for audio settings to pass through source format (prevents distortion)
+            audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
             audioInput?.expectsMediaDataInRealTime = true
             
             if let videoInput = videoInput, assetWriter?.canAdd(videoInput) == true {
