@@ -127,6 +127,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var audioInput: AVAssetWriterInput?
     private var currentChunkURL: URL?
     private var isWriting = false
+    private var sessionStartTime: CMTime?  // Track first sample time for offset
     
     // MARK: - Chunk URLs for merging
     private var completedChunkURLs: [URL] = []
@@ -282,6 +283,14 @@ class SampleHandler: RPBroadcastSampleHandler {
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         guard isWriting, let writer = assetWriter, writer.status == .writing else { return }
         
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        
+        // Start session with first sample's timestamp
+        if sessionStartTime == nil {
+            sessionStartTime = timestamp
+            writer.startSession(atSourceTime: timestamp)
+        }
+        
         switch sampleBufferType {
         case .video:
             frameCount += 1
@@ -364,7 +373,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             }
             
             assetWriter?.startWriting()
-            assetWriter?.startSession(atSourceTime: .zero)
+            // Don't call startSession here - we'll call it with the first sample's timestamp
+            sessionStartTime = nil  // Reset for new chunk
             isWriting = true
             
             NSLog("[BroadcastExtension] Started chunk \(chunkIndex)")
