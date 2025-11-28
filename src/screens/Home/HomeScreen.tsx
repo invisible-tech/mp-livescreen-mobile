@@ -173,30 +173,30 @@ export const HomeScreen: React.FC = () => {
 
         {/* Task Info Card */}
         {hasTask && taskParams && (
-          <View style={[styles.taskCard, { backgroundColor: theme.colors.surface }]}>
+          <View style={[styles.taskBox, { borderColor: theme.colors.border }]}>
             <View style={styles.taskHeader}>
-              <View style={[styles.taskIndicator, { backgroundColor: theme.colors.primary }]} />
-              <Text variant="caption" color={theme.colors.textSecondary}>
+              <View style={[styles.taskIndicator, { backgroundColor: theme.colors.success }]} />
+              <Text variant="caption" color={theme.colors.success} style={styles.activeTaskLabel}>
                 ACTIVE TASK
               </Text>
             </View>
-            <Text variant="body" weight="semiBold" style={styles.campaignName}>
+            <Text variant="body" color={theme.colors.text} style={styles.taskValue}>
               {taskParams.campaignName}
             </Text>
-            <Text variant="bodySmall" color={theme.colors.textSecondary}>
-              Task ID: {taskParams.taskId}
+            <Text variant="bodySmall" color={theme.colors.textSecondary} style={styles.taskIdText}>
+              {taskParams.taskId}
             </Text>
           </View>
         )}
 
         {/* No Task Warning */}
         {!hasTask && (
-          <View style={[styles.noTaskCard, { backgroundColor: theme.colors.backgroundSecondary }]}>
-            <Text variant="body" color={theme.colors.textSecondary} align="center">
+          <View style={[styles.taskBox, { borderColor: theme.colors.border }]}>
+            <Text variant="body" color={theme.colors.text} align="center" style={styles.noTaskTitle}>
               No task selected
             </Text>
-            <Text variant="caption" color={theme.colors.textTertiary} align="center" style={styles.noTaskHint}>
-              Open a task from Marketplace web app
+            <Text variant="body" color={theme.colors.textSecondary} align="center" style={styles.noTaskHintBold}>
+              Start a task from Marketplace web app on this phone
             </Text>
           </View>
         )}
@@ -339,16 +339,20 @@ const styles = StyleSheet.create({
   broadcastPicker: {
     width: '100%',
   },
-  taskCard: {
+  taskBox: {
     marginHorizontal: 24,
     marginTop: 16,
     padding: 16,
     borderRadius: 12,
+    borderWidth: 1.5,
   },
   taskHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  activeTaskLabel: {
+    fontWeight: '700',
   },
   taskIndicator: {
     width: 8,
@@ -356,17 +360,22 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginRight: 8,
   },
-  campaignName: {
+  noTaskTitle: {
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  noTaskHintBold: {
+    marginTop: 8,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  taskValue: {
+    fontWeight: '700',
+    fontSize: 17,
     marginBottom: 4,
   },
-  noTaskCard: {
-    marginHorizontal: 24,
-    marginTop: 16,
-    padding: 20,
-    borderRadius: 12,
-  },
-  noTaskHint: {
-    marginTop: 4,
+  taskIdText: {
+    marginTop: 2,
   },
 });
 
