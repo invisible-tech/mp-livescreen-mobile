@@ -68,7 +68,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     
     private let appGroup = "group.com.marketplace.live.screen"
     private let uploadEndpoint = "/api/upload-mobile-content"
-    private var chunkDuration: TimeInterval = 10.0
+    private var chunkDuration: TimeInterval = 30.0 // 30 seconds - smaller chunks upload before extension dies
     private var apiBaseUrl: String = "https://vdi-dev-ali.invsta.systems"
     
     // MARK: - Task Parameters
@@ -85,6 +85,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var startTime: Date?
     private var lastChunkTime: Date?
     private var frameCount: Int = 0
+    private var micSampleCount: Int = 0
     
     // MARK: - Video Writing (Video + App Audio)
     
@@ -174,6 +175,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         lastChunkTime = Date()
         chunkIndex = 0
         frameCount = 0
+        micSampleCount = 0
         completedChunkURLs = []
         isWriterConfigured = false
         pendingVideoSample = nil
@@ -229,14 +231,20 @@ class SampleHandler: RPBroadcastSampleHandler {
                 pendingAudioSample = sampleBuffer
             }
         case .audioMic:
-            // Mic audio goes to separate writer (human_X.m4a)
-            if pendingMicSample == nil {
-                pendingMicSample = sampleBuffer
-                configureMicWriter()
+            // Mic audio - start session on first sample, then append
+            if !isMicWriting, let writer = micWriter, writer.status == .writing {
+                let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                writer.startSession(atSourceTime: timestamp)
+                isMicWriting = true
+                NSLog("[BroadcastExtension] Mic session started at \(CMTimeGetSeconds(timestamp))s")
             }
-            @unknown default:
-                break
+            // Always append mic samples (mic writer is pre-configured)
+            if isMicWriting, let input = micInput, input.isReadyForMoreMediaData {
+                input.append(sampleBuffer)
             }
+        @unknown default:
+            break
+        }
             
             // Once we have both, configure the writer
             if pendingVideoSample != nil && pendingAudioSample != nil {
@@ -264,9 +272,16 @@ class SampleHandler: RPBroadcastSampleHandler {
                 input.append(sampleBuffer)
             }
         case .audioMic:
-            // Mic audio goes to separate mic writer
-            if let input = micInput, input.isReadyForMoreMediaData {
+            // Mic audio - start session if not started, then append
+            if !isMicWriting, let writer = micWriter, writer.status == .writing {
+                let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                writer.startSession(atSourceTime: timestamp)
+                isMicWriting = true
+                ExtensionLogger.shared.log("🎤 Mic session started")
+            }
+            if isMicWriting, let input = micInput, input.isReadyForMoreMediaData {
                 input.append(sampleBuffer)
+                micSampleCount += 1
             }
             
         @unknown default:
@@ -290,8 +305,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             AVVideoWidthKey: width,
             AVVideoHeightKey: height,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 6000000,
-                AVVideoMaxKeyFrameIntervalKey: 60
+                AVVideoAverageBitRateKey: 2000000, // 2 Mbps - smaller files, faster upload
+                AVVideoMaxKeyFrameIntervalKey: 30
             ]
         ]
         
@@ -348,52 +363,6 @@ class SampleHandler: RPBroadcastSampleHandler {
     
     // MARK: - Mic Writer Configuration
     
-    private func configureMicWriter() {
-        guard let micSample = pendingMicSample,
-              let formatDesc = CMSampleBufferGetFormatDescription(micSample),
-              let micWriter = micWriter,
-              !isMicWriterConfigured else {
-            return
-        }
-        
-        let log = ExtensionLogger.shared
-        
-        // Get mic audio format
-        if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee {
-            log.log("Mic: \(Int(asbd.mSampleRate)) Hz, \(asbd.mChannelsPerFrame) ch")
-            
-            // Use mic's native format for best quality
-            let micSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: asbd.mSampleRate,
-                AVNumberOfChannelsKey: asbd.mChannelsPerFrame,
-                AVEncoderBitRateKey: 128000
-            ]
-            
-            micInput = AVAssetWriterInput(mediaType: .audio, outputSettings: micSettings)
-            micInput?.expectsMediaDataInRealTime = true
-            
-            if let micInput = micInput, micWriter.canAdd(micInput) {
-                micWriter.add(micInput)
-            }
-        }
-        
-        micWriter.startWriting()
-        let timestamp = CMSampleBufferGetPresentationTimeStamp(micSample)
-        micWriter.startSession(atSourceTime: timestamp)
-        
-        // Write pending sample
-        if let input = micInput, input.isReadyForMoreMediaData {
-            input.append(micSample)
-        }
-        
-        isMicWriterConfigured = true
-        isMicWriting = true
-        pendingMicSample = nil
-        
-        log.log("Mic writer configured")
-    }
-    
     // MARK: - Chunk Management
     
     private func checkChunkDuration() {
@@ -436,30 +405,53 @@ class SampleHandler: RPBroadcastSampleHandler {
             pendingVideoSample = nil
             pendingAudioSample = nil
             
-            // Mic writer
+            // Mic writer - PRE-CONFIGURE with known format (48000 Hz, mono)
+            // Don't wait for sample - this fixes missing mic files issue
             micWriter = try AVAssetWriter(url: micUrl, fileType: .m4a)
-            isMicWriterConfigured = false
-            isMicWriting = false
+            
+            let micSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 48000,      // iOS mic is always 48kHz
+                AVNumberOfChannelsKey: 1,     // Mono
+                AVEncoderBitRateKey: 128000
+            ]
+            micInput = AVAssetWriterInput(mediaType: .audio, outputSettings: micSettings)
+            micInput?.expectsMediaDataInRealTime = true
+            
+            if let input = micInput, micWriter?.canAdd(input) == true {
+                micWriter?.add(input)
+            }
+            
+            micWriter?.startWriting()
+            isMicWriterConfigured = true
+            isMicWriting = false  // Will be set to true when first sample arrives
             pendingMicSample = nil
             
-            NSLog("[BroadcastExtension] Prepared chunk \(chunkIndex) (video + mic)")
+            let log = ExtensionLogger.shared
+            log.log("📦 Prepared chunk \(chunkIndex)")
+            log.log("   Video writer: \(assetWriter != nil ? "✓" : "✗")")
+            log.log("   Mic writer: \(micWriter != nil ? "✓" : "✗"), status: \(micWriter?.status.rawValue ?? -1)")
+            log.log("   Mic input: \(micInput != nil ? "✓" : "✗")")
         } catch {
             NSLog("[BroadcastExtension] Failed to create writer: \(error)")
         }
     }
     
     private func finalizeCurrentChunk(isFinal: Bool) {
-        guard isWriting else { return }
+        let log = ExtensionLogger.shared
+        log.log("🔄 Finalizing chunk \(chunkIndex) (isFinal: \(isFinal))")
+        log.log("   Video frames: \(frameCount), Mic samples: \(micSampleCount)")
+        log.log("   isWriting: \(isWriting), isMicWriting: \(isMicWriting)")
+        
+        guard isWriting else { 
+            log.log("⚠️ Video writer not writing - skipping finalize")
+            return 
+        }
         isWriting = false
         
         let currentIndex = chunkIndex
         let chunkURL = currentChunkURL
         let micURL = currentMicURL
-        
-        // Wait a bit for mic writer to catch up if video finished first
-        if !isMicWriterConfigured && pendingMicSample != nil {
-            Thread.sleep(forTimeInterval: 0.1) // 100ms grace period
-        }
         
         // Finalize video writer
         videoInput?.markAsFinished()
@@ -491,6 +483,23 @@ class SampleHandler: RPBroadcastSampleHandler {
         _ = videoSemaphore.wait(timeout: .now() + 5.0)
         _ = micSemaphore.wait(timeout: .now() + 5.0)
         
+        // Log file sizes
+        if let url = chunkURL, FileManager.default.fileExists(atPath: url.path),
+           let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let size = attrs[.size] as? Int64 {
+            log.log("✅ Video file: \(size / 1024) KB")
+        } else {
+            log.log("❌ Video file missing or empty")
+        }
+        
+        if let url = micURL, FileManager.default.fileExists(atPath: url.path),
+           let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let size = attrs[.size] as? Int64 {
+            log.log("✅ Mic file: \(size / 1024) KB")
+        } else {
+            log.log("❌ Mic file missing or empty")
+        }
+        
         // Upload both video and mic in single request
         uploadChunk(videoURL: chunkURL, micURL: micURL, chunkIndex: currentIndex, isFinal: isFinal)
         
@@ -504,11 +513,6 @@ class SampleHandler: RPBroadcastSampleHandler {
         let currentIndex = chunkIndex
         let chunkURL = currentChunkURL
         let micURL = currentMicURL
-        
-        // Wait a bit for mic writer to catch up if video finished first
-        if !isMicWriterConfigured && pendingMicSample != nil {
-            Thread.sleep(forTimeInterval: 0.1) // 100ms grace period
-        }
         
         // Finalize video writer
         if isWriting {
