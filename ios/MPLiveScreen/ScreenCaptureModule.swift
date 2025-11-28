@@ -103,15 +103,55 @@ class ScreenCaptureModule: NSObject {
   @objc
   func checkPendingVideo(_ resolve: @escaping RCTPromiseResolveBlock,
                           reject: @escaping RCTPromiseRejectBlock) {
+    NSLog("[ScreenCaptureModule] checkPendingVideo called")
+    
+    guard let defaults = UserDefaults(suiteName: appGroup) else {
+      NSLog("[ScreenCaptureModule] Failed to access App Group")
+      resolve(nil)
+      return
+    }
+    
+    // Check for pending video flag set by extension
+    let pendingReady = defaults.bool(forKey: "pendingVideoReady")
+    let pendingPath = defaults.string(forKey: "pendingVideoPath")
+    
+    NSLog("[ScreenCaptureModule] pendingReady: \(pendingReady), path: \(pendingPath ?? "nil")")
+    
+    if pendingReady, let path = pendingPath {
+      // Verify file exists
+      if FileManager.default.fileExists(atPath: path) {
+        let url = URL(fileURLWithPath: path)
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+           let size = attrs[.size] as? Int64 {
+          let result: [String: Any] = [
+            "path": path,
+            "filename": url.lastPathComponent,
+            "size": size
+          ]
+          NSLog("[ScreenCaptureModule] Found pending video: \(url.lastPathComponent), size: \(size) bytes")
+          resolve(result)
+          return
+        }
+      } else {
+        // File doesn't exist, clear the flag
+        NSLog("[ScreenCaptureModule] Pending video file not found, clearing flag")
+        defaults.removeObject(forKey: "pendingVideoReady")
+        defaults.removeObject(forKey: "pendingVideoPath")
+        defaults.synchronize()
+      }
+    }
+    
+    // Fallback: look for any LiveCapture_ files
     guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
       resolve(nil)
       return
     }
     
-    // Look for merged video files
     do {
       let files = try FileManager.default.contentsOfDirectory(at: containerURL, includingPropertiesForKeys: nil)
       let videoFiles = files.filter { $0.pathExtension == "mp4" && $0.lastPathComponent.hasPrefix("LiveCapture_") }
+      
+      NSLog("[ScreenCaptureModule] Found \(videoFiles.count) video files in App Group")
       
       if let latestVideo = videoFiles.sorted(by: { $0.lastPathComponent > $1.lastPathComponent }).first {
         let attrs = try FileManager.default.attributesOfItem(atPath: latestVideo.path)
@@ -122,8 +162,10 @@ class ScreenCaptureModule: NSObject {
           "filename": latestVideo.lastPathComponent,
           "size": size
         ]
+        NSLog("[ScreenCaptureModule] Found video: \(latestVideo.lastPathComponent)")
         resolve(result)
       } else {
+        NSLog("[ScreenCaptureModule] No pending videos found")
         resolve(nil)
       }
     } catch {
@@ -143,57 +185,66 @@ class ScreenCaptureModule: NSObject {
       return
     }
     
-    // Find the latest merged video
-    do {
-      let files = try FileManager.default.contentsOfDirectory(at: containerURL, includingPropertiesForKeys: nil)
-      let videoFiles = files.filter { $0.pathExtension == "mp4" && $0.lastPathComponent.hasPrefix("LiveCapture_") }
-      
-      guard let latestVideo = videoFiles.sorted(by: { $0.lastPathComponent > $1.lastPathComponent }).first else {
-        NSLog("[ScreenCaptureModule] No pending video found")
-        resolve(false)
-        return
+    guard let defaults = UserDefaults(suiteName: appGroup) else {
+      reject("APP_GROUP_ERROR", "Failed to access UserDefaults", nil)
+      return
+    }
+    
+    // First check the pending path from extension
+    var videoURL: URL? = nil
+    
+    if let pendingPath = defaults.string(forKey: "pendingVideoPath"),
+       FileManager.default.fileExists(atPath: pendingPath) {
+      videoURL = URL(fileURLWithPath: pendingPath)
+      NSLog("[ScreenCaptureModule] Using pending path: \(pendingPath)")
+    } else {
+      // Fallback: find any LiveCapture_ files
+      do {
+        let files = try FileManager.default.contentsOfDirectory(at: containerURL, includingPropertiesForKeys: nil)
+        let videoFiles = files.filter { $0.pathExtension == "mp4" && $0.lastPathComponent.hasPrefix("LiveCapture_") }
+        videoURL = videoFiles.sorted(by: { $0.lastPathComponent > $1.lastPathComponent }).first
+      } catch {
+        NSLog("[ScreenCaptureModule] Error listing files: \(error)")
       }
-      
-      NSLog("[ScreenCaptureModule] Found video: \(latestVideo.lastPathComponent)")
-      
-      // Check photo library permission
-      let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-      guard status == .authorized || status == .limited else {
-        NSLog("[ScreenCaptureModule] Photo library permission not granted: \(status.rawValue)")
-        reject("PERMISSION_ERROR", "Photo library permission required", nil)
-        return
+    }
+    
+    guard let latestVideo = videoURL else {
+      NSLog("[ScreenCaptureModule] No pending video found")
+      resolve(false)
+      return
+    }
+    
+    NSLog("[ScreenCaptureModule] Saving video: \(latestVideo.lastPathComponent)")
+    
+    // Check photo library permission
+    let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+    guard status == .authorized || status == .limited else {
+      NSLog("[ScreenCaptureModule] Photo library permission not granted: \(status.rawValue)")
+      reject("PERMISSION_ERROR", "Photo library permission required. Status: \(status.rawValue)", nil)
+      return
+    }
+    
+    // Save to Photos
+    PHPhotoLibrary.shared().performChanges({
+      PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: latestVideo)
+    }) { success, error in
+      if success {
+        NSLog("[ScreenCaptureModule] ✅ Video saved to Photos!")
+        
+        // Clean up the file
+        try? FileManager.default.removeItem(at: latestVideo)
+        
+        // Clear flags
+        defaults.removeObject(forKey: "pendingVideoReady")
+        defaults.removeObject(forKey: "pendingVideoPath")
+        defaults.removeObject(forKey: "pendingVideoTimestamp")
+        defaults.synchronize()
+        
+        resolve(true)
+      } else {
+        NSLog("[ScreenCaptureModule] ❌ Failed to save to Photos: \(error?.localizedDescription ?? "unknown")")
+        reject("SAVE_ERROR", error?.localizedDescription ?? "Failed to save video", error)
       }
-      
-      // Save to Photos
-      PHPhotoLibrary.shared().performChanges({
-        PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: latestVideo)
-      }) { success, error in
-        if success {
-          NSLog("[ScreenCaptureModule] ✅ Video saved to Photos!")
-          
-          // Clean up the file
-          try? FileManager.default.removeItem(at: latestVideo)
-          
-          // Also clean up chunks directory
-          let chunksDir = containerURL.appendingPathComponent("chunks")
-          try? FileManager.default.removeItem(at: chunksDir)
-          
-          // Clear the saved flag
-          if let defaults = UserDefaults(suiteName: self.appGroup) {
-            defaults.removeObject(forKey: "videoSavedToPhotos")
-            defaults.synchronize()
-          }
-          
-          resolve(true)
-        } else {
-          NSLog("[ScreenCaptureModule] ❌ Failed to save to Photos: \(error?.localizedDescription ?? "unknown")")
-          reject("SAVE_ERROR", error?.localizedDescription ?? "Failed to save video", error)
-        }
-      }
-      
-    } catch {
-      NSLog("[ScreenCaptureModule] Error: \(error)")
-      reject("FILE_ERROR", error.localizedDescription, error)
     }
   }
   

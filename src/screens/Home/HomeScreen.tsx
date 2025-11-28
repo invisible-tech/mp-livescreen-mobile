@@ -19,13 +19,37 @@ import { useTheme } from '@/context/ThemeContext';
 import { useTask } from '@/context';
 import { useScreenCapture } from '@/hooks';
 import { RecordingStatus } from '@/types';
+import ScreenCapture from '@/native/ScreenCapture';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export const HomeScreen: React.FC = () => {
   const { theme } = useTheme();
   const { taskParams, hasTask } = useTask();
-  const { state, startRecording, stopRecording, isRecording } = useScreenCapture();
+  const { state, startRecording, stopRecording, isRecording, requestPermissions } = useScreenCapture();
+
+  // Request permissions on mount
+  useEffect(() => {
+    const initPermissions = async () => {
+      if (Platform.OS === 'ios') {
+        try {
+          console.log('[HomeScreen] Checking permissions...');
+          const status = await ScreenCapture.checkPermissions();
+          console.log('[HomeScreen] Current permissions:', status);
+          
+          if (!status.microphone || !status.photoLibrary) {
+            console.log('[HomeScreen] Requesting missing permissions...');
+            const result = await requestPermissions();
+            console.log('[HomeScreen] Permission request result:', result);
+          }
+        } catch (error) {
+          console.error('[HomeScreen] Permission error:', error);
+        }
+      }
+    };
+    
+    initPermissions();
+  }, [requestPermissions]);
 
   // Pulse animation for recording state
   const pulseAnim = useRef(new Animated.Value(1)).current;
