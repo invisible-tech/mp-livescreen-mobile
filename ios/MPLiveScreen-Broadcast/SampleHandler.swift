@@ -223,13 +223,58 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         log.log("🛑 Broadcast finished - duration: \(String(format: "%.1f", duration))s, frames: \(frameCount)")
         
-        // Finalize last chunk
-        finalizeCurrentChunk(isFinal: true)
+        // Finalize last chunk synchronously
+        finalizeLastChunkAndMerge()
+    }
+    
+    private func finalizeLastChunkAndMerge() {
+        let log = ExtensionLogger.shared
+        log.log("📦 Finalizing last chunk...")
         
-        // Wait for finalization, then merge
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.mergeChunksToSingleVideo()
+        guard isWriting else {
+            log.log("⚠️ Not writing - proceeding to merge")
+            mergeChunksToSingleVideo()
+            return
         }
+        isWriting = false
+        
+        videoInput?.markAsFinished()
+        audioInput?.markAsFinished()
+        
+        let currentIndex = chunkIndex
+        let chunkURL = currentChunkURL
+        
+        // Use semaphore to wait for finishWriting to complete
+        let semaphore = DispatchSemaphore(value: 0)
+        
+        assetWriter?.finishWriting { [weak self] in
+            guard let self = self, let url = chunkURL else {
+                log.log("❌ finishWriting failed")
+                semaphore.signal()
+                return
+            }
+            
+            if FileManager.default.fileExists(atPath: url.path) {
+                self.completedChunkURLs.append(url)
+                log.log("✅ Final chunk \(currentIndex) saved")
+            }
+            
+            // Upload last chunk (don't wait for it)
+            self.uploadChunk(fileURL: url, chunkIndex: currentIndex, isFinal: true)
+            
+            semaphore.signal()
+        }
+        
+        // Wait up to 5 seconds for finalization
+        let result = semaphore.wait(timeout: .now() + 5.0)
+        if result == .timedOut {
+            log.log("⚠️ Finalization timed out, proceeding with available chunks")
+        }
+        
+        chunkIndex += 1
+        
+        // Now merge synchronously
+        mergeChunksToSingleVideo()
     }
     
     // MARK: - Sample Processing
@@ -370,6 +415,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
         
         let sortedChunks = completedChunkURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        log.log("Chunks to merge: \(sortedChunks.map { $0.lastPathComponent })")
         
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
@@ -415,6 +461,7 @@ class SampleHandler: RPBroadcastSampleHandler {
                     }
                     
                     currentTime = CMTimeAdd(currentTime, duration)
+                    log.log("Added chunk: \(chunkURL.lastPathComponent)")
                 }
             } catch {
                 log.log("⚠️ Failed to add chunk: \(error.localizedDescription)")
@@ -423,7 +470,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         log.log("Total duration: \(CMTimeGetSeconds(currentTime))s")
         
-        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetMediumQuality) else {
             log.log("❌ Failed to create exporter")
             cleanupChunks()
             return
@@ -431,38 +478,58 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         exporter.outputURL = mergedURL
         exporter.outputFileType = .mp4
-        exporter.shouldOptimizeForNetworkUse = true
+        exporter.shouldOptimizeForNetworkUse = false // Faster
         
-        exporter.exportAsynchronously { [weak self] in
-            guard let self = self else { return }
-            
+        log.log("Starting synchronous export...")
+        
+        // Use semaphore to make export synchronous
+        let semaphore = DispatchSemaphore(value: 0)
+        var exportSuccess = false
+        
+        exporter.exportAsynchronously {
             switch exporter.status {
             case .completed:
-                if let attrs = try? FileManager.default.attributesOfItem(atPath: mergedURL.path),
-                   let size = attrs[.size] as? Int64 {
-                    log.log("✅ Merged video ready: \(size / 1024 / 1024) MB")
-                }
-                
-                // Notify main app that video is ready
-                if let defaults = UserDefaults(suiteName: self.appGroup) {
-                    defaults.set(true, forKey: "pendingVideoReady")
-                    defaults.set(mergedURL.path, forKey: "pendingVideoPath")
-                    defaults.set(Date().timeIntervalSince1970, forKey: "pendingVideoTimestamp")
-                    defaults.synchronize()
-                }
-                
-                log.log("📱 Main app will save to Photos when opened")
-                
-                // Clean up chunks (but keep merged video!)
-                self.cleanupChunks()
-                
+                exportSuccess = true
             case .failed:
                 log.log("❌ Export failed: \(exporter.error?.localizedDescription ?? "unknown")")
-                self.cleanupChunks()
-                
             default:
                 log.log("⚠️ Export status: \(exporter.status.rawValue)")
             }
+            semaphore.signal()
+        }
+        
+        // Wait up to 30 seconds for export
+        let result = semaphore.wait(timeout: .now() + 30.0)
+        
+        if result == .timedOut {
+            log.log("⚠️ Export timed out!")
+            exporter.cancelExport()
+            cleanupChunks()
+            return
+        }
+        
+        if exportSuccess {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: mergedURL.path),
+               let size = attrs[.size] as? Int64 {
+                log.log("✅ Merged video ready: \(size / 1024) KB")
+            }
+            
+            // Notify main app that video is ready
+            if let defaults = UserDefaults(suiteName: appGroup) {
+                defaults.set(true, forKey: "pendingVideoReady")
+                defaults.set(mergedURL.path, forKey: "pendingVideoPath")
+                defaults.set(Date().timeIntervalSince1970, forKey: "pendingVideoTimestamp")
+                defaults.synchronize()
+                log.log("✅ Flags set for main app")
+            }
+            
+            log.log("📱 Main app will save to Photos when opened")
+            
+            // Clean up chunks (but keep merged video!)
+            cleanupChunks()
+        } else {
+            log.log("❌ Export did not succeed")
+            cleanupChunks()
         }
     }
     
