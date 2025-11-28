@@ -22,8 +22,6 @@
 	<string>1</string>
 	<key>MinimumOSVersion</key>
 	<string>15.0</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Save your screen recordings to Photos for easy access and sharing</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

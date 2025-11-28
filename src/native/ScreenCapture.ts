@@ -57,6 +57,10 @@ interface ScreenCaptureNativeModule {
   clearTaskParams: () => Promise<boolean>;
   setChunkDuration: (seconds: number) => Promise<boolean>;
   getUploadStatus: () => Promise<UploadStatus | null>;
+  
+  // Debug
+  getExtensionLogs: () => Promise<string>;
+  listAppGroupFiles: () => Promise<string>;
 }
 
 // Mock implementation for when native module is not available
@@ -110,6 +114,14 @@ const MockScreenCapture: ScreenCaptureNativeModule = {
   getUploadStatus: async () => {
     console.warn('[ScreenCapture] Mock: getUploadStatus');
     return null;
+  },
+  getExtensionLogs: async () => {
+    console.warn('[ScreenCapture] Mock: getExtensionLogs');
+    return 'Mock: No logs available';
+  },
+  listAppGroupFiles: async () => {
+    console.warn('[ScreenCapture] Mock: listAppGroupFiles');
+    return 'Mock: No files';
   },
 };
 

@@ -375,4 +375,64 @@ class ScreenCaptureModule: NSObject {
       resolve(nil)
     }
   }
+  
+  /// Get extension logs from App Group file
+  @objc
+  func getExtensionLogs(_ resolve: @escaping RCTPromiseResolveBlock,
+                        reject: @escaping RCTPromiseRejectBlock) {
+    guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
+      resolve("Failed to access App Group container")
+      return
+    }
+    
+    let logFileURL = containerURL.appendingPathComponent("extension_logs.txt")
+    
+    if FileManager.default.fileExists(atPath: logFileURL.path) {
+      do {
+        let logs = try String(contentsOf: logFileURL, encoding: .utf8)
+        resolve(logs)
+      } catch {
+        resolve("Failed to read logs: \(error.localizedDescription)")
+      }
+    } else {
+      resolve("No extension logs yet. Start a recording first.")
+    }
+  }
+  
+  /// List all files in App Group (for debugging)
+  @objc
+  func listAppGroupFiles(_ resolve: @escaping RCTPromiseResolveBlock,
+                          reject: @escaping RCTPromiseRejectBlock) {
+    guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
+      resolve("Failed to access App Group container")
+      return
+    }
+    
+    var result = "App Group: \(containerURL.path)\n\nFiles:\n"
+    
+    do {
+      let files = try FileManager.default.contentsOfDirectory(at: containerURL, includingPropertiesForKeys: [.fileSizeKey])
+      for file in files {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: file.path)
+        let size = attrs?[.size] as? Int64 ?? 0
+        result += "  \(file.lastPathComponent) (\(size) bytes)\n"
+      }
+      
+      // Also check chunks folder
+      let chunksDir = containerURL.appendingPathComponent("chunks")
+      if FileManager.default.fileExists(atPath: chunksDir.path) {
+        result += "\nChunks folder:\n"
+        let chunks = try FileManager.default.contentsOfDirectory(at: chunksDir, includingPropertiesForKeys: nil)
+        for chunk in chunks {
+          let attrs = try? FileManager.default.attributesOfItem(atPath: chunk.path)
+          let size = attrs?[.size] as? Int64 ?? 0
+          result += "  \(chunk.lastPathComponent) (\(size) bytes)\n"
+        }
+      }
+    } catch {
+      result += "Error: \(error.localizedDescription)"
+    }
+    
+    resolve(result)
+  }
 }

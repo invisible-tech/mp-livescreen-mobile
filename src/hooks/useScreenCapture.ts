@@ -113,12 +113,23 @@ export const useScreenCapture = (): UseScreenCaptureReturn => {
 
   // Check for pending videos when app comes to foreground
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (
         appStateRef.current.match(/inactive|background/) &&
         nextAppState === 'active'
       ) {
         console.log('[ScreenCapture] App came to foreground, checking for pending videos...');
+        
+        // Read extension logs to see what happened
+        try {
+          const logs = await ScreenCapture.getExtensionLogs?.();
+          if (logs) {
+            console.log('[ScreenCapture] Extension logs:\n' + logs.slice(-2000)); // Last 2000 chars
+          }
+        } catch (e) {
+          // Ignore if method doesn't exist
+        }
+        
         // Delay slightly to let the extension finish saving
         setTimeout(() => {
           checkAndSavePendingVideo();
