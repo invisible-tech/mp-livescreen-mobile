@@ -477,8 +477,18 @@ class SampleHandler: RPBroadcastSampleHandler {
         var currentTime = CMTime.zero
         var successCount = 0
         
+        // Verify all chunks exist first
+        for (i, url) in sortedChunks.enumerated() {
+            let exists = FileManager.default.fileExists(atPath: url.path)
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+            log.log("Chunk \(i): exists=\(exists), size=\(size) bytes")
+        }
+        
         for chunkURL in sortedChunks {
-            guard FileManager.default.fileExists(atPath: chunkURL.path) else { continue }
+            guard FileManager.default.fileExists(atPath: chunkURL.path) else {
+                log.log("⚠️ Chunk missing: \(chunkURL.lastPathComponent)")
+                continue
+            }
             
             let asset = AVURLAsset(url: chunkURL, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
             
@@ -535,12 +545,18 @@ class SampleHandler: RPBroadcastSampleHandler {
         exporter.exportAsynchronously {
             exportSuccess = (exporter.status == .completed)
             if !exportSuccess {
+                let error = exporter.error as NSError?
                 log.log("❌ Export error: \(exporter.error?.localizedDescription ?? "unknown")")
+                log.log("❌ Error code: \(error?.code ?? -1), domain: \(error?.domain ?? "unknown")")
             }
             semaphore.signal()
         }
         
-        _ = semaphore.wait(timeout: .now() + 60.0)
+        let waitResult = semaphore.wait(timeout: .now() + 60.0)
+        if waitResult == .timedOut {
+            log.log("❌ Export timed out")
+            exporter.cancelExport()
+        }
         
         if exportSuccess {
             if let attrs = try? FileManager.default.attributesOfItem(atPath: mergedURL.path),
@@ -550,8 +566,18 @@ class SampleHandler: RPBroadcastSampleHandler {
             setVideoReadyFlag(path: mergedURL.path)
             cleanupChunks()
         } else {
-            log.log("❌ Export failed - fallback")
-            copyChunkAsOutput(sortedChunks.last!, to: containerURL)
+            log.log("❌ Export failed - fallback to largest chunk")
+            // Find the largest chunk (most complete recording)
+            let largestChunk = sortedChunks.max { a, b in
+                let sizeA = (try? FileManager.default.attributesOfItem(atPath: a.path)[.size] as? Int64) ?? 0
+                let sizeB = (try? FileManager.default.attributesOfItem(atPath: b.path)[.size] as? Int64) ?? 0
+                return sizeA < sizeB
+            }
+            if let chunk = largestChunk {
+                copyChunkAsOutput(chunk, to: containerURL)
+            } else {
+                cleanupChunks()
+            }
         }
     }
     
