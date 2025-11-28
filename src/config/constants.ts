@@ -2,7 +2,7 @@ import Config from 'react-native-config';
 
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: Config.API_BASE_URL || 'https://vdi-dev.invsta.systems',
+  BASE_URL: Config.API_BASE_URL || 'https://vdi-dev-ali.invsta.systems',
   API_KEY: Config.API_KEY || '',
   TIMEOUT: 30000,
   CHUNK_TIMEOUT: 60000,
@@ -28,6 +28,7 @@ export const APP_CONFIG = {
 
 // API Endpoints
 export const API_ENDPOINTS = {
+  UPLOAD_MOBILE_CONTENT: '/api/upload-mobile-content',
   RECORDINGS: {
     START: '/api/v1/recordings/start',
     CHUNK: (recordingId: string) => `/api/v1/recordings/${recordingId}/chunk`,

@@ -13,6 +13,7 @@ import {
   Text,
   BroadcastPicker,
   ScreenTitle,
+  UploadStatus,
 } from '@/components';
 import { useTheme } from '@/context/ThemeContext';
 import { useTask } from '@/context';
@@ -190,6 +191,9 @@ export const HomeScreen: React.FC = () => {
             </View>
           </Animated.View>
         )}
+
+        {/* Upload Status */}
+        <UploadStatus isRecording={isRecording} />
 
         {/* Error Message */}
         {state.error && (

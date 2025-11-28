@@ -1,4 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { NativeModules, Platform } from 'react-native';
+import { API_CONFIG } from '@/config';
+
+const { ScreenCaptureModule } = NativeModules;
 
 export interface TaskParams {
   tenantId: string;
@@ -24,19 +28,44 @@ interface TaskProviderProps {
 export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
   const [taskParams, setTaskParamsState] = useState<TaskParams | null>(null);
 
-  const setTaskParams = useCallback((params: TaskParams | null) => {
+  const setTaskParams = useCallback(async (params: TaskParams | null) => {
     setTaskParamsState(params);
+    
     if (params) {
       console.log('[TaskContext] Task params set:', {
         campaignName: params.campaignName,
         taskId: params.taskId,
       });
+      
+      // Save to App Group for Broadcast Extension access (iOS only)
+      if (Platform.OS === 'ios' && ScreenCaptureModule?.setTaskParams) {
+        try {
+          // Include API base URL from .env config
+          await ScreenCaptureModule.setTaskParams({
+            ...params,
+            apiBaseUrl: API_CONFIG.BASE_URL,
+          });
+          console.log('[TaskContext] Task params saved to App Group (apiBaseUrl:', API_CONFIG.BASE_URL, ')');
+        } catch (error) {
+          console.error('[TaskContext] Failed to save task params to App Group:', error);
+        }
+      }
     }
   }, []);
 
-  const clearTaskParams = useCallback(() => {
+  const clearTaskParams = useCallback(async () => {
     setTaskParamsState(null);
     console.log('[TaskContext] Task params cleared');
+    
+    // Clear from App Group (iOS only)
+    if (Platform.OS === 'ios' && ScreenCaptureModule?.clearTaskParams) {
+      try {
+        await ScreenCaptureModule.clearTaskParams();
+        console.log('[TaskContext] Task params cleared from App Group');
+      } catch (error) {
+        console.error('[TaskContext] Failed to clear task params from App Group:', error);
+      }
+    }
   }, []);
 
   const hasTask = useMemo(() => taskParams !== null, [taskParams]);

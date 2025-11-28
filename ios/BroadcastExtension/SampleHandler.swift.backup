@@ -100,7 +100,6 @@ class ExtensionLogger {
     }
 }
 
-@objc(SampleHandler)
 class SampleHandler: RPBroadcastSampleHandler {
     
     // MARK: - Configuration

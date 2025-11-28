@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StatusBar, Linking } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeProvider, useTheme, TaskProvider, useTask, parseDeepLink } from '@/context';
+import { ThemeProvider, useTheme, TaskProvider, useTask, parseDeepLink, RecordingProvider } from '@/context';
 import { RootNavigator } from '@/navigation';
 import { SplashScreen } from '@/screens';
 import { lightTheme, darkTheme } from '@/theme';
@@ -116,7 +116,9 @@ const App: React.FC = () => {
     <SafeAreaProvider>
       <ThemeProvider>
         <TaskProvider>
-          <AppContent />
+          <RecordingProvider>
+            <AppContent />
+          </RecordingProvider>
         </TaskProvider>
       </ThemeProvider>
     </SafeAreaProvider>
