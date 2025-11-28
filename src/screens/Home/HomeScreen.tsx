@@ -15,6 +15,7 @@ import {
   ScreenTitle,
 } from '@/components';
 import { useTheme } from '@/context/ThemeContext';
+import { useTask } from '@/context';
 import { useScreenCapture } from '@/hooks';
 import { RecordingStatus } from '@/types';
 
@@ -22,6 +23,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export const HomeScreen: React.FC = () => {
   const { theme } = useTheme();
+  const { taskParams, hasTask } = useTask();
   const { state, startRecording, stopRecording, isRecording } = useScreenCapture();
 
   // Pulse animation for recording state
@@ -143,6 +145,36 @@ export const HomeScreen: React.FC = () => {
 
       <Container safeAreaEdges={['bottom']} style={styles.innerContainer}>
         <ScreenTitle title="Live Capture" />
+
+        {/* Task Info Card */}
+        {hasTask && taskParams && (
+          <View style={[styles.taskCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.taskHeader}>
+              <View style={[styles.taskIndicator, { backgroundColor: theme.colors.primary }]} />
+              <Text variant="caption" color={theme.colors.textSecondary}>
+                ACTIVE TASK
+              </Text>
+            </View>
+            <Text variant="body" weight="semiBold" style={styles.campaignName}>
+              {taskParams.campaignName}
+            </Text>
+            <Text variant="bodySmall" color={theme.colors.textSecondary}>
+              Task ID: {taskParams.taskId}
+            </Text>
+          </View>
+        )}
+
+        {/* No Task Warning */}
+        {!hasTask && (
+          <View style={[styles.noTaskCard, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <Text variant="body" color={theme.colors.textSecondary} align="center">
+              No task selected
+            </Text>
+            <Text variant="caption" color={theme.colors.textTertiary} align="center" style={styles.noTaskHint}>
+              Open a task from Marketplace web app
+            </Text>
+          </View>
+        )}
 
         {/* Live Badge when recording */}
         {isRecording && (
@@ -278,6 +310,35 @@ const styles = StyleSheet.create({
   },
   broadcastPicker: {
     width: '100%',
+  },
+  taskCard: {
+    marginHorizontal: 24,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+  },
+  taskHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  taskIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  campaignName: {
+    marginBottom: 4,
+  },
+  noTaskCard: {
+    marginHorizontal: 24,
+    marginTop: 16,
+    padding: 20,
+    borderRadius: 12,
+  },
+  noTaskHint: {
+    marginTop: 4,
   },
 });
 

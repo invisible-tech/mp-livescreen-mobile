@@ -183,10 +183,6 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
         <View style={styles.logoBox}>
           <Text style={styles.logoText}>MP</Text>
         </View>
-        {/* Recording indicator */}
-        <View style={styles.recordingIndicator}>
-          <View style={styles.recordingDot} />
-        </View>
       </Animated.View>
 
       {/* App name */}
@@ -282,28 +278,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: -1,
     lineHeight: 52,
-  },
-  recordingIndicator: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  recordingDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#FF3B30',
   },
   textContainer: {
     marginTop: 32,

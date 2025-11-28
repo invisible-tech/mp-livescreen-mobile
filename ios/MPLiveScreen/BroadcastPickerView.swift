@@ -45,7 +45,7 @@ class BroadcastPickerView: UIView {
         // Create the system broadcast picker
         broadcastPicker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         broadcastPicker.preferredExtension = "com.marketplace.live.screen.broadcast"
-        broadcastPicker.showsMicrophoneButton = false
+        broadcastPicker.showsMicrophoneButton = true
         
         NSLog("[BroadcastPickerView] Configured for extension: com.marketplace.livescreen.broadcast")
         

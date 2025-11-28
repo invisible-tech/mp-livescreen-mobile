@@ -11,6 +11,7 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 #import <React/RCTViewManager.h>
+#import <React/RCTLinkingManager.h>
 
 #endif /* MPLiveScreen_Bridging_Header_h */
 
