@@ -858,6 +858,9 @@ class SampleHandler: RPBroadcastSampleHandler {
         
         let uploadStartTime = Date()
         
+        // For final chunk, wait synchronously so extension doesn't die before upload completes
+        let semaphore = isFinal ? DispatchSemaphore(value: 0) : nil
+        
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let elapsed = Date().timeIntervalSince(uploadStartTime)
             
@@ -868,6 +871,7 @@ class SampleHandler: RPBroadcastSampleHandler {
                 log.log("   \(error.localizedDescription)")
                 self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: error.localizedDescription)
                 log.log("========== UPLOAD FAILED ==========")
+                semaphore?.signal()
                 return
             }
             
@@ -890,8 +894,17 @@ class SampleHandler: RPBroadcastSampleHandler {
                     log.log("========== UPLOAD FAILED ==========")
                 }
             }
+            
+            semaphore?.signal()
         }
         
         task.resume()
+        
+        // Wait for final chunk upload to complete (up to 30 seconds)
+        if isFinal {
+            log.log("⏳ Waiting for final chunk upload to complete...")
+            _ = semaphore?.wait(timeout: .now() + 30.0)
+            log.log("✅ Final chunk upload wait complete")
+        }
     }
 }
