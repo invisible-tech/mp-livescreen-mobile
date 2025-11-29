@@ -34,6 +34,7 @@ interface TaskParams {
   stepId?: string;
   taskId?: string;
   apiBaseUrl?: string;
+  aiAppType?: 'gemini' | 'chatgpt';
 }
 
 interface ScreenCaptureNativeModule {
@@ -51,6 +52,7 @@ interface ScreenCaptureNativeModule {
   startBroadcast: () => Promise<void>;
   stopBroadcast: () => Promise<void>;
   isRecording: () => Promise<boolean>;
+  isBroadcastActive: () => Promise<boolean>;
   
   // Task Parameters
   setTaskParams: (params: TaskParams) => Promise<boolean>;
@@ -97,6 +99,10 @@ const MockScreenCapture: ScreenCaptureNativeModule = {
   },
   isRecording: async () => {
     console.warn('[ScreenCapture] Mock: isRecording');
+    return false;
+  },
+  isBroadcastActive: async () => {
+    console.warn('[ScreenCapture] Mock: isBroadcastActive');
     return false;
   },
   setTaskParams: async () => {

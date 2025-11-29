@@ -278,6 +278,18 @@ class ScreenCaptureModule: NSObject {
     resolve(isRecordingState)
   }
   
+  /// Check if broadcast is currently active (set by extension)
+  @objc
+  func isBroadcastActive(_ resolve: @escaping RCTPromiseResolveBlock,
+                         reject: @escaping RCTPromiseRejectBlock) {
+    guard let defaults = UserDefaults(suiteName: appGroup) else {
+      resolve(false)
+      return
+    }
+    let isActive = defaults.bool(forKey: "isBroadcastActive")
+    resolve(isActive)
+  }
+  
   // MARK: - Task Parameters
   
   /// Save task parameters to App Group for the Broadcast Extension to access
@@ -312,6 +324,11 @@ class ScreenCaptureModule: NSObject {
     // Save API base URL (passed from JS .env config)
     if let apiBaseUrl = params["apiBaseUrl"] as? String {
       defaults.set(apiBaseUrl, forKey: "apiBaseUrl")
+    }
+    // Save AI app type (gemini/chatgpt)
+    if let aiAppType = params["aiAppType"] as? String {
+      defaults.set(aiAppType, forKey: "aiAppType")
+      NSLog("[ScreenCaptureModule] AI App type saved: \(aiAppType)")
     }
     
     defaults.synchronize()

@@ -54,7 +54,7 @@ export const BroadcastPicker: React.FC<BroadcastPickerProps> = ({
         </View>
 
         {/* Native picker - positioned exactly over the button */}
-        {Platform.OS === 'ios' && NativeBroadcastPicker && !isRecording && (
+        {Platform.OS === 'ios' && NativeBroadcastPicker && (
           <View style={styles.nativePickerContainer}>
             <NativeBroadcastPicker style={styles.nativePicker} />
           </View>
@@ -81,14 +81,13 @@ export const BroadcastPicker: React.FC<BroadcastPickerProps> = ({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     width: '100%',
-    paddingVertical: 16,
   },
   buttonWrapper: {
     width: 100,
     height: 100,
-    marginBottom: 24,
+    marginBottom: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -168,12 +167,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 1,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,

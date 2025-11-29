@@ -1,15 +1,18 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
   Alert,
-  Platform,
   Animated,
   Dimensions,
+  Modal,
+  TouchableOpacity,
+  Clipboard,
+  Linking,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import {
   Container,
-  Button,
   Text,
   BroadcastPicker,
   ScreenTitle,
@@ -18,38 +21,33 @@ import {
 import { useTheme } from '@/context/ThemeContext';
 import { useTask } from '@/context';
 import { useScreenCapture } from '@/hooks';
-import { RecordingStatus } from '@/types';
 import ScreenCapture from '@/native/ScreenCapture';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// AI App types
+type AIAppType = 'gemini' | 'chatgpt';
+
 export const HomeScreen: React.FC = () => {
   const { theme } = useTheme();
-  const { taskParams, hasTask } = useTask();
-  const { state, startRecording, stopRecording, isRecording, requestPermissions } = useScreenCapture();
+  const { taskParams, hasTask, clearTaskParams } = useTask();
+  const { state, isRecording } = useScreenCapture();
+  
+  // AI App selection state
+  const [showAIAppModal, setShowAIAppModal] = useState(false);
+  const [aiAppSelected, setAiAppSelected] = useState(false);
+  
+  // Marketplace environment selection
+  const [showMarketplaceModal, setShowMarketplaceModal] = useState(false);
+  
+  // Task completion state
+  const [taskCompleted, setTaskCompleted] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [chunksUploaded, setChunksUploaded] = useState(0);
+  const [completedTaskName, setCompletedTaskName] = useState<string | null>(null);
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
+  const [broadcastStarted, setBroadcastStarted] = useState(false);
 
-  // Request permissions on mount
-  useEffect(() => {
-    const initPermissions = async () => {
-      if (Platform.OS === 'ios') {
-        try {
-          console.log('[HomeScreen] Checking permissions...');
-          const status = await ScreenCapture.checkPermissions();
-          console.log('[HomeScreen] Current permissions:', status);
-          
-          if (!status.microphone || !status.photoLibrary) {
-            console.log('[HomeScreen] Requesting missing permissions...');
-            const result = await requestPermissions();
-            console.log('[HomeScreen] Permission request result:', result);
-          }
-        } catch (error) {
-          console.error('[HomeScreen] Permission error:', error);
-        }
-      }
-    };
-    
-    initPermissions();
-  }, [requestPermissions]);
 
   // Pulse animation for recording state
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -57,7 +55,6 @@ export const HomeScreen: React.FC = () => {
 
   useEffect(() => {
     if (isRecording) {
-      // Pulse animation when recording
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -73,7 +70,6 @@ export const HomeScreen: React.FC = () => {
         ])
       ).start();
 
-      // Glow animation
       Animated.loop(
         Animated.sequence([
           Animated.timing(glowAnim, {
@@ -94,69 +90,125 @@ export const HomeScreen: React.FC = () => {
     }
   }, [isRecording, pulseAnim, glowAnim]);
 
-  const handleToggleRecording = useCallback(async () => {
-    if (isRecording) {
-      Alert.alert('Stop Broadcast', 'Are you sure you want to stop sharing your screen?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Stop',
-          style: 'destructive',
-          onPress: stopRecording,
-        },
-      ]);
-    } else {
-      await startRecording();
-    }
-  }, [isRecording, startRecording, stopRecording]);
+  // Handle Start task button when no task
+  const handleNoTask = useCallback(() => {
+    setShowMarketplaceModal(true);
+  }, []);
 
-  const getButtonConfig = () => {
-    switch (state.status) {
-      case RecordingStatus.IDLE:
-        return {
-          title: 'Start Broadcast',
-          icon: 'radio-outline',
-          variant: 'primary' as const,
-          loading: false,
-        };
-      case RecordingStatus.PREPARING:
-        return {
-          title: 'Preparing...',
-          icon: 'hourglass-outline',
-          variant: 'primary' as const,
-          loading: true,
-        };
-      case RecordingStatus.RECORDING:
-        return {
-          title: 'Stop Broadcast',
-          icon: 'stop-circle-outline',
-          variant: 'danger' as const,
-          loading: false,
-        };
-      case RecordingStatus.STOPPING:
-        return {
-          title: 'Stopping...',
-          icon: 'hourglass-outline',
-          variant: 'danger' as const,
-          loading: true,
-        };
-      case RecordingStatus.ERROR:
-        return {
-          title: 'Try Again',
-          icon: 'refresh-outline',
-          variant: 'primary' as const,
-          loading: false,
-        };
-      default:
-        return {
-          title: 'Start Broadcast',
-          icon: 'radio-outline',
-          variant: 'primary' as const,
-          loading: false,
-        };
-    }
+  // Handle Start task button when has task
+  const handleStartTask = useCallback(() => {
+    setShowAIAppModal(true);
+  }, []);
+
+  // Handle AI app selection
+  const handleAIAppSelect = useCallback((appType: AIAppType) => {
+    setShowAIAppModal(false);
+    setAiAppSelected(true);
+    setRecordingStartTime(Date.now());
+    setCompletedTaskName(taskParams?.campaignName || 'Task');
+    
+    // Save the AI app type (fire and forget)
+    ScreenCapture.setTaskParams({
+      ...taskParams,
+      aiAppType: appType,
+    }).catch(() => {});
+  }, [taskParams]);
+
+  // Poll broadcast state when AI app is selected
+  useEffect(() => {
+    if (!aiAppSelected) return;
+    
+    const checkBroadcastState = async () => {
+      try {
+        const isActive = await ScreenCapture.isBroadcastActive();
+        
+        if (isActive && !broadcastStarted) {
+          // Broadcast just started
+          setBroadcastStarted(true);
+          setRecordingStartTime(Date.now());
+        } else if (!isActive && broadcastStarted) {
+          // Broadcast just stopped - show completion
+          setBroadcastStarted(false);
+          
+          // Calculate duration
+          if (recordingStartTime) {
+            const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
+            setRecordingDuration(duration);
+          }
+          
+          setAiAppSelected(false);
+          setTaskCompleted(true);
+          
+          // Poll for upload status in background (max 10 seconds)
+          const pollUploadStatus = async () => {
+            for (let i = 0; i < 20; i++) {
+              await new Promise<void>(resolve => setTimeout(resolve, 500));
+              const status = await ScreenCapture.getUploadStatus();
+              if (status?.status === 'success' && status.chunksUploaded > 0) {
+                setChunksUploaded(status.chunksUploaded);
+                return;
+              }
+            }
+          };
+          pollUploadStatus();
+        }
+      } catch {
+        // Ignore errors
+      }
+    };
+    
+    // Check immediately and then every 500ms
+    checkBroadcastState();
+    const interval = setInterval(checkBroadcastState, 500);
+    
+    return () => clearInterval(interval);
+  }, [aiAppSelected, broadcastStarted, recordingStartTime]);
+
+  // Handle Submit task
+  const handleSubmitTask = useCallback(() => {
+    // Clear all state
+    setTaskCompleted(false);
+    setAiAppSelected(false);
+    setRecordingDuration(0);
+    setChunksUploaded(0);
+    setCompletedTaskName(null);
+    setRecordingStartTime(null);
+    setBroadcastStarted(false);
+    
+    // Clear task from context
+    clearTaskParams();
+  }, [clearTaskParams]);
+
+  // Copy to clipboard
+  const handleCopy = useCallback((text: string, label: string) => {
+    Clipboard.setString(text);
+    Alert.alert('Copied', `${label} copied to clipboard`);
+  }, []);
+
+  // Open Marketplace in Chrome
+  const handleOpenMarketplace = useCallback((url: string) => {
+    setShowMarketplaceModal(false);
+    // Try to open in Chrome, fallback to default browser
+    const chromeUrl = `googlechrome://${url.replace(/^https?:\/\//, '')}`;
+    Linking.canOpenURL(chromeUrl)
+      .then(canOpen => {
+        if (canOpen) {
+          Linking.openURL(chromeUrl);
+        } else {
+          Linking.openURL(url);
+        }
+      })
+      .catch(() => {
+        Linking.openURL(url);
+      });
+  }, []);
+
+  // Format duration as MM:SS
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  const buttonConfig = getButtonConfig();
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -171,8 +223,8 @@ export const HomeScreen: React.FC = () => {
       <Container safeAreaEdges={['bottom']} style={styles.innerContainer}>
         <ScreenTitle title="Live Capture" />
 
-        {/* Task Info Card */}
-        {hasTask && taskParams && (
+        {/* Task Info Card - Active task */}
+        {hasTask && taskParams && !taskCompleted && (
           <View style={[styles.taskBox, { borderColor: theme.colors.border }]}>
             <View style={styles.taskHeader}>
               <View style={[styles.taskIndicator, { backgroundColor: theme.colors.success }]} />
@@ -180,12 +232,72 @@ export const HomeScreen: React.FC = () => {
                 ACTIVE TASK
               </Text>
             </View>
-            <Text variant="body" color={theme.colors.text} style={styles.taskValue}>
-              {taskParams.campaignName}
-            </Text>
-            <Text variant="bodySmall" color={theme.colors.textSecondary} style={styles.taskIdText}>
-              {taskParams.taskId}
-            </Text>
+            <View style={styles.copyRow}>
+              <Text variant="body" color={theme.colors.text} style={styles.taskValue}>
+                {taskParams.campaignName}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleCopy(taskParams.campaignName || '', 'Campaign name')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Icon name="copy-outline" size={16} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.copyRow}>
+              <Text variant="bodySmall" color={theme.colors.textSecondary} style={styles.taskIdText}>
+                {taskParams.taskId}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleCopy(taskParams.taskId || '', 'Task ID')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Icon name="copy-outline" size={14} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Task Completed Card - with duration and chunks */}
+        {taskCompleted && (
+          <View style={[styles.taskBox, { borderColor: theme.colors.border }]}>
+            <View style={styles.taskHeader}>
+              <View style={[styles.taskIndicator, { backgroundColor: theme.colors.success }]} />
+              <Text variant="caption" color={theme.colors.success} style={styles.activeTaskLabel}>
+                COMPLETED
+              </Text>
+            </View>
+            <View style={styles.copyRow}>
+              <Text variant="body" color={theme.colors.text} style={styles.taskValue}>
+                {completedTaskName || 'Task'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleCopy(completedTaskName || '', 'Campaign name')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Icon name="copy-outline" size={16} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.copyRow}>
+              <Text variant="bodySmall" color={theme.colors.textSecondary} style={styles.taskIdText}>
+                {taskParams?.taskId}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleCopy(taskParams?.taskId || '', 'Task ID')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Icon name="copy-outline" size={14} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.completionStats}>
+              <View style={styles.statRow}>
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Duration</Text>
+                <Text style={[styles.statValue, { color: theme.colors.text }]}>{formatDuration(recordingDuration)}</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Chunks uploaded</Text>
+                <Text style={[styles.statValue, { color: theme.colors.text }]}>{chunksUploaded}</Text>
+              </View>
+            </View>
           </View>
         )}
 
@@ -196,7 +308,14 @@ export const HomeScreen: React.FC = () => {
               No task selected
             </Text>
             <Text variant="body" color={theme.colors.textSecondary} align="center" style={styles.noTaskHintBold}>
-              Start a task from Marketplace web app on this phone
+              Open{' '}
+              <Text
+                style={styles.marketplaceLink}
+                onPress={() => setShowMarketplaceModal(true)}
+              >
+                Marketplace
+              </Text>
+              {' '}and start a task
             </Text>
           </View>
         )}
@@ -237,28 +356,151 @@ export const HomeScreen: React.FC = () => {
         )}
       </Container>
 
-      {/* Bottom Button Section - Fixed at bottom */}
+      {/* Bottom Button Section */}
       <View style={[styles.buttonContainer, { backgroundColor: theme.colors.background }]}>
-          {Platform.OS === 'ios' ? (
-            <BroadcastPicker
-              style={styles.broadcastPicker}
-              onPress={handleToggleRecording}
-              isRecording={isRecording}
-              startTime={state.startTime}
-            />
-          ) : (
-            <Button
-              title={buttonConfig.title}
-              icon={buttonConfig.icon}
-              variant={buttonConfig.variant}
-              size="xl"
-              onPress={handleToggleRecording}
-              loading={buttonConfig.loading}
-              disabled={buttonConfig.loading}
-              fullWidth
-            />
-          )}
+        {/* Task Completed - Show Submit button */}
+        {taskCompleted && !isRecording ? (
+          <TouchableOpacity
+            style={styles.submitTaskButton}
+            onPress={handleSubmitTask}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.submitTaskButtonText}>Submit task</Text>
+          </TouchableOpacity>
+        ) : !aiAppSelected && hasTask && !isRecording ? (
+          /* Has task, no AI app selected - show Start task button */
+          <TouchableOpacity
+            style={styles.startTaskButton}
+            onPress={handleStartTask}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.startTaskButtonText}>Start task</Text>
+          </TouchableOpacity>
+        ) : !hasTask && !isRecording ? (
+          /* No task - show disabled-looking button */
+          <TouchableOpacity
+            style={[styles.startTaskButton, styles.startTaskButtonDisabled]}
+            onPress={handleNoTask}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.startTaskButtonText}>Start task</Text>
+          </TouchableOpacity>
+        ) : (
+          /* AI app selected - show BroadcastPicker only */
+          <BroadcastPicker
+            style={styles.broadcastPicker}
+            isRecording={isRecording}
+            startTime={state.startTime}
+          />
+        )}
+      </View>
+
+      {/* AI App Selection Modal */}
+      <Modal
+        visible={showAIAppModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAIAppModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              Select AI App
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
+              Which AI app will you be using?
+            </Text>
+            
+            <TouchableOpacity
+              style={[styles.appOption, { borderColor: theme.colors.border }]}
+              onPress={() => handleAIAppSelect('gemini')}
+            >
+              <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
+                🤖 Gemini
+              </Text>
+              <Text style={[styles.appOptionHint, { color: theme.colors.success }]}>
+                Full audio support
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.appOption, { borderColor: theme.colors.border }]}
+              onPress={() => handleAIAppSelect('chatgpt')}
+            >
+              <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
+                💬 ChatGPT
+              </Text>
+              <Text style={[styles.appOptionHint, { color: theme.colors.warning }]}>
+                Screen only (voice limited)
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowAIAppModal(false)}
+            >
+              <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
+      </Modal>
+
+      {/* Marketplace Environment Selection Modal */}
+      <Modal
+        visible={showMarketplaceModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMarketplaceModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              Start task
+            </Text>
+            <Text style={[styles.chromeWarning, { color: theme.colors.text }]}>
+              Make sure you have Chrome app installed
+            </Text>
+            
+            <TouchableOpacity
+              style={[styles.envOption, { borderColor: theme.colors.border }]}
+              onPress={() => handleOpenMarketplace('https://om.marketplace.qa.invsta.systems/')}
+            >
+              <Text style={[styles.envOptionText, { color: theme.colors.text }]}>
+                Open Marketplace (QA)
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.envOption, { borderColor: theme.colors.border }]}
+              onPress={() => handleOpenMarketplace('https://om.marketplace.invsta.systems/')}
+            >
+              <Text style={[styles.envOptionText, { color: theme.colors.text }]}>
+                Open Marketplace (Staging)
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.envOption, { borderColor: theme.colors.border }]}
+              onPress={() => handleOpenMarketplace('https://om.marketplace.inv.tech/')}
+            >
+              <Text style={[styles.envOptionText, { color: theme.colors.text }]}>
+                Open Marketplace (Prod)
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowMarketplaceModal(false)}
+            >
+              <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -333,11 +575,59 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: 12,
+    paddingBottom: 32,
     paddingTop: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
   },
   broadcastPicker: {
     width: '100%',
+  },
+  startTaskButton: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+  },
+  startTaskButtonDisabled: {
+    opacity: 0.5,
+  },
+  startTaskButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Task completion styles
+  completionStats: {
+    marginTop: 12,
+    gap: 8,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: 14,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  submitTaskButton: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+  },
+  submitTaskButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   taskBox: {
     marginHorizontal: 24,
@@ -373,9 +663,82 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 17,
     marginBottom: 4,
+    flex: 1,
   },
   taskIdText: {
     marginTop: 2,
+    flex: 1,
+  },
+  copyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: SCREEN_WIDTH - 48,
+    borderRadius: 16,
+    padding: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  appOption: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  marketplaceLink: {
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
+  chromeWarning: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  envOption: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  envOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  appOptionText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  appOptionHint: {
+    fontSize: 13,
+  },
+  cancelButton: {
+    marginTop: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
   },
 });
 

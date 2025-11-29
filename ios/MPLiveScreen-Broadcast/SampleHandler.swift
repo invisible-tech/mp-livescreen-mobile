@@ -77,6 +77,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var campaignId: String?
     private var taskId: String?
     private var stepId: String?
+    private var aiAppType: String?
     
     // MARK: - Recording State
     
@@ -135,6 +136,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         campaignId = defaults.string(forKey: "campaignId")
         taskId = defaults.string(forKey: "taskId")
         stepId = defaults.string(forKey: "stepId")
+        aiAppType = defaults.string(forKey: "aiAppType")
         
         if let savedApiUrl = defaults.string(forKey: "apiBaseUrl"), !savedApiUrl.isEmpty {
             apiBaseUrl = savedApiUrl
@@ -169,6 +171,12 @@ class SampleHandler: RPBroadcastSampleHandler {
         log.clear()
         
         log.log("🎬 BROADCAST STARTED!")
+        
+        // Signal to main app that broadcast is active
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            defaults.set(true, forKey: "isBroadcastActive")
+            defaults.synchronize()
+        }
         
         recordingId = UUID().uuidString
         startTime = Date()
@@ -205,6 +213,12 @@ class SampleHandler: RPBroadcastSampleHandler {
         let duration = startTime.map { Date().timeIntervalSince($0) } ?? 0
         
         log.log("🛑 Broadcast finished - duration: \(String(format: "%.1f", duration))s, frames: \(frameCount)")
+        
+        // Signal to main app that broadcast stopped
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            defaults.set(false, forKey: "isBroadcastActive")
+            defaults.synchronize()
+        }
         
         finalizeLastChunkAndMerge()
     }
@@ -828,7 +842,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
         
         // Metadata fields
-        let fields: [String: String] = [
+        var fields: [String: String] = [
             "tenant_id": tenantId,
             "campaign_id": campaignId,
             "task_id": taskId,
@@ -837,6 +851,11 @@ class SampleHandler: RPBroadcastSampleHandler {
             "chunk_index": String(chunkIndex),
             "is_final": String(isFinal)
         ]
+        
+        // Add app type if available
+        if let aiAppType = aiAppType {
+            fields["app_type"] = aiAppType
+        }
         
         // Log metadata
         log.log("📋 METADATA:")

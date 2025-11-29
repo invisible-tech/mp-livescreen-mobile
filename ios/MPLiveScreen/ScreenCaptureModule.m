@@ -37,6 +37,9 @@ RCT_EXTERN_METHOD(stopBroadcast:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(isRecording:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(isBroadcastActive:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
 // Task Parameters
 RCT_EXTERN_METHOD(setTaskParams:(NSDictionary *)params
                   resolve:(RCTPromiseResolveBlock)resolve
