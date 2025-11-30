@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -13,12 +13,14 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { useNavigation } from '@react-navigation/native';
 import {
   Container,
   Text,
   BroadcastPicker,
   ScreenTitle,
   UploadStatus,
+  HelpModal,
 } from '@/components';
 import { useTheme } from '@/context/ThemeContext';
 import { useTask, useServerEnv } from '@/context';
@@ -35,10 +37,28 @@ export const HomeScreen: React.FC = () => {
   const { taskParams, hasTask, clearTaskParams } = useTask();
   const { state, isRecording } = useScreenCapture();
   const { apiBaseUrl, marketplaceUrl } = useServerEnv();
+  const navigation = useNavigation();
   
   // AI App selection state
   const [showAIAppModal, setShowAIAppModal] = useState(false);
   const [aiAppSelected, setAiAppSelected] = useState(false);
+  
+  // Help modal state
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Set up header right button
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          style={{ marginRight: 16, padding: 8 }}
+          onPress={() => setShowHelpModal(true)}
+        >
+          <Icon name="ellipsis-horizontal-circle-outline" size={28} color={theme.colors.text} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme.colors.text]);
   
   // ChatGPT specific state
   const [selectedAIAppType, setSelectedAIAppType] = useState<AIAppType | null>(null);
@@ -569,6 +589,9 @@ export const HomeScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Help Modal */}
+      <HelpModal visible={showHelpModal} onClose={() => setShowHelpModal(false)} />
 
     </View>
   );

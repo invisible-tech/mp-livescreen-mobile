@@ -1,19 +1,10 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '@/context/ThemeContext';
 import { HomeScreen, SettingsScreen } from '@/screens';
 import type { MainTabsParamList } from './types';
-
-const HeaderRightButton: React.FC<{ color: string }> = ({ color }) => (
-  <TouchableOpacity 
-    style={{ marginRight: 16, padding: 8 }} 
-    onPress={() => console.log('Menu pressed')}
-  >
-    <Icon name="ellipsis-horizontal-circle-outline" size={28} color={color} />
-  </TouchableOpacity>
-);
 
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 
@@ -74,7 +65,6 @@ export const MainTabNavigator: React.FC = () => {
           tabBarIcon: ({ focused, color, size }) => (
             <TabIcon name="home" focused={focused} color={color} size={size} />
           ),
-          headerRight: () => <HeaderRightButton color={theme.colors.text} />,
         }}
       />
       <Tab.Screen

@@ -6,4 +6,5 @@ export { Container } from './Container';
 export { BroadcastPicker } from './BroadcastPicker';
 export { ScreenTitle } from './ScreenTitle';
 export { UploadStatus } from './UploadStatus';
+export { HelpModal } from './HelpModal';
 
