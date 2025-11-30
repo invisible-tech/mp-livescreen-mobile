@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import Video, { VideoRef } from 'react-native-video';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -28,41 +29,44 @@ interface HelpModalProps {
 export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
   const { theme } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('gemini');
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [showFullscreenVideo, setShowFullscreenVideo] = useState(false);
+  const [fullscreenVideoSource, setFullscreenVideoSource] = useState<any>(null);
   const videoRef = useRef<VideoRef>(null);
 
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+  const handleOpenFullscreen = (appType: TabType) => {
+    console.log('[HelpModal] Opening fullscreen for:', appType);
+    const videoSource = appType === 'gemini' ? geminiVideo : chatgptVideo;
+    console.log('[HelpModal] Video source:', videoSource);
+    setFullscreenVideoSource(videoSource);
+    setShowFullscreenVideo(true);
+    console.log('[HelpModal] showFullscreenVideo set to true');
   };
 
-  const renderVideoPlayer = (appType: TabType) => {
-    const videoSource = appType === 'gemini' ? geminiVideo : chatgptVideo;
-    
+  const handleCloseFullscreen = () => {
+    setShowFullscreenVideo(false);
+    setFullscreenVideoSource(null);
+    // Also close the entire help modal
+    onClose();
+  };
+
+  const renderVideoThumbnail = (appType: TabType) => {
     return (
-      <View style={[styles.videoContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <TouchableOpacity 
-          style={styles.videoWrapper}
-          onPress={handlePlayPause}
-          activeOpacity={0.9}
-        >
-          <Video
-            ref={videoRef}
-            source={videoSource}
-            style={styles.video}
-            resizeMode="contain"
-            paused={!isPlaying || activeTab !== appType}
-            repeat
-            controls={false}
-          />
-          {!isPlaying && (
-            <View style={styles.playOverlay}>
-              <View style={[styles.playButton, { backgroundColor: theme.colors.text }]}>
-                <Icon name="play" size={32} color={theme.colors.background} />
-              </View>
+      <TouchableOpacity 
+        style={[styles.videoContainer, { backgroundColor: theme.colors.backgroundSecondary }]}
+        onPress={() => {
+          console.log('[HelpModal] Video tapped:', appType);
+          handleOpenFullscreen(appType);
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.videoWrapper}>
+          <View style={[styles.thumbnailPlaceholder, { backgroundColor: '#000000' }]}>
+            <View style={[styles.playButton, { backgroundColor: theme.colors.background }]}>
+              <Icon name="play" size={32} color={theme.colors.text} />
             </View>
-          )}
-        </TouchableOpacity>
-      </View>
+          </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -208,14 +212,51 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
 
   // Reset video when switching tabs or closing modal
   const handleTabChange = (tab: TabType) => {
-    setIsPlaying(false);
     setActiveTab(tab);
   };
 
   const handleClose = () => {
-    setIsPlaying(false);
+    setShowFullscreenVideo(false);
     onClose();
   };
+
+  // If fullscreen video is showing, render only the video player
+  if (showFullscreenVideo && fullscreenVideoSource) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="fade"
+        onRequestClose={handleCloseFullscreen}
+      >
+        <View style={styles.fullscreenContainer}>
+          <StatusBar hidden />
+          
+          {/* Close Button */}
+          <TouchableOpacity
+            style={styles.fullscreenCloseButton}
+            onPress={handleCloseFullscreen}
+          >
+            <View style={styles.fullscreenCloseIcon}>
+              <Icon name="close" size={28} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+          
+          {/* Video Player */}
+          <Video
+            ref={videoRef}
+            source={fullscreenVideoSource}
+            style={styles.fullscreenVideo}
+            resizeMode="contain"
+            paused={false}
+            repeat
+            controls={true}
+            onLoad={() => console.log('[HelpModal] Video loaded')}
+            onError={(error) => console.log('[HelpModal] Video error:', JSON.stringify(error))}
+          />
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
@@ -283,7 +324,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
               bounces={true}
             >
               {/* Video Section */}
-              {renderVideoPlayer(activeTab)}
+              {renderVideoThumbnail(activeTab)}
 
               {/* Steps Section */}
               <View style={styles.stepsSection}>
@@ -383,11 +424,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  thumbnailPlaceholder: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   playButton: {
     width: 64,
@@ -445,6 +486,35 @@ const styles = StyleSheet.create({
   closeButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Fullscreen video styles
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenVideo: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  fullscreenCloseButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  fullscreenCloseIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 16,
   },
 });
 
