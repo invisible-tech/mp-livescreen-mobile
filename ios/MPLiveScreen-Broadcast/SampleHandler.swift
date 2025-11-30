@@ -819,9 +819,11 @@ class SampleHandler: RPBroadcastSampleHandler {
             body.append("\r\n".data(using: .utf8)!)
         }
         
-        // Optional: mic audio (name="mic_file")
+        // Optional: mic audio (name="mic_file") - skip for ChatGPT (user exports manually)
         var hasMic = false
-        if let micURL = micURL, FileManager.default.fileExists(atPath: micURL.path),
+        let isChatGPT = aiAppType?.lowercased() == "chatgpt"
+        if !isChatGPT,
+           let micURL = micURL, FileManager.default.fileExists(atPath: micURL.path),
            let micData = try? Data(contentsOf: micURL), micData.count > 0 {
             micSize = micData.count
             hasMic = true
@@ -837,6 +839,8 @@ class SampleHandler: RPBroadcastSampleHandler {
         log.log("   file: chunk_\(chunkIndex).mp4 → \(videoSize / 1024) KB")
         if hasMic {
             log.log("   mic_file: human_\(chunkIndex).m4a → \(micSize / 1024) KB")
+        } else if isChatGPT {
+            log.log("   mic_file: SKIPPED (ChatGPT - user exports manually)")
         } else {
             log.log("   mic_file: NOT INCLUDED (no mic data)")
         }

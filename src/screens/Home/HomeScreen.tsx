@@ -46,19 +46,24 @@ export const HomeScreen: React.FC = () => {
   // Help modal state
   const [showHelpModal, setShowHelpModal] = useState(false);
 
+  // Stable callback for header button
+  const openHelpModal = useCallback(() => {
+    setShowHelpModal(true);
+  }, []);
+
   // Set up header right button
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
         <TouchableOpacity
           style={{ marginRight: 16, padding: 8 }}
-          onPress={() => setShowHelpModal(true)}
+          onPress={openHelpModal}
         >
           <Icon name="ellipsis-horizontal-circle-outline" size={28} color={theme.colors.text} />
         </TouchableOpacity>
       ),
     });
-  }, [navigation, theme.colors.text]);
+  }, [navigation, theme.colors.text, openHelpModal]);
   
   // ChatGPT specific state
   const [selectedAIAppType, setSelectedAIAppType] = useState<AIAppType | null>(null);
@@ -256,11 +261,11 @@ export const HomeScreen: React.FC = () => {
     try {
       const formData = new FormData();
       
-      // Add video file
+      // Add video file (named human_0.mp4 as per BE requirement)
       formData.append('file', {
         uri: videoUri,
         type: 'video/mp4',
-        name: 'chatgpt_export.mp4',
+        name: 'human_0.mp4',
       } as any);
       
       // Add metadata

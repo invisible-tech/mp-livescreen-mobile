@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { NativeEventEmitter, Platform, AppState, Alert } from 'react-native';
+import { NativeEventEmitter, Platform, AppState } from 'react-native';
 import { RecordingStatus, RecordingState } from '@/types';
 import ScreenCapture from '@/native/ScreenCapture';
 
@@ -15,7 +15,6 @@ interface UseScreenCaptureReturn {
   stopRecording: () => Promise<void>;
   isRecording: boolean;
   requestPermissions: () => Promise<boolean>;
-  checkAndSavePendingVideo: () => Promise<void>;
 }
 
 const initialState: RecordingState = {
@@ -56,95 +55,29 @@ export const useScreenCapture = (): UseScreenCaptureReturn => {
     }
   }, []);
 
-  // Check and save any pending video from a previous recording
-  const checkAndSavePendingVideo = useCallback(async () => {
-    if (Platform.OS !== 'ios') {
-      return;
-    }
-
-    try {
-      const pendingVideo = await ScreenCapture.checkPendingVideo();
-      
-      if (pendingVideo) {
-        console.log('[ScreenCapture] Found pending video:', pendingVideo.filename);
-        
-        // Check if we have permission
-        const permissions = await ScreenCapture.checkPermissions();
-        
-        if (permissions.photoLibrary) {
-          // Save automatically
-          console.log('[ScreenCapture] Saving video to Photos...');
-          const saved = await ScreenCapture.savePendingVideoToPhotos();
-          
-          if (saved) {
-            Alert.alert(
-              'Recording Saved! 🎉',
-              'Your screen recording has been saved to Photos.',
-              [{ text: 'OK' }]
-            );
-          }
-        } else {
-          // Ask user for permission
-          Alert.alert(
-            'Save Recording?',
-            'A screen recording is ready to save. Allow access to Photos to save it.',
-            [
-              { text: 'Not Now', style: 'cancel' },
-              {
-                text: 'Allow & Save',
-                onPress: async () => {
-                  const granted = await ScreenCapture.requestPhotoLibraryPermission();
-                  if (granted) {
-                    const saved = await ScreenCapture.savePendingVideoToPhotos();
-                    if (saved) {
-                      Alert.alert('Saved!', 'Recording saved to Photos.');
-                    }
-                  }
-                },
-              },
-            ]
-          );
-        }
-      }
-    } catch (error) {
-      console.error('[ScreenCapture] Error checking pending video:', error);
-    }
-  }, []);
-
-  // Check for pending videos when app comes to foreground
+  // Log extension activity when app comes to foreground (for debugging)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (
         appStateRef.current.match(/inactive|background/) &&
         nextAppState === 'active'
       ) {
-        console.log('[ScreenCapture] App came to foreground, checking for pending videos...');
-        
-        // Read extension logs to see what happened
-        try {
-          const logs = await ScreenCapture.getExtensionLogs?.();
-          if (logs) {
-            console.log('[ScreenCapture] Extension logs:\n' + logs.slice(-2000)); // Last 2000 chars
-          }
-        } catch (e) {
-          // Ignore if method doesn't exist
-        }
-        
-        // Delay slightly to let the extension finish saving
-        setTimeout(() => {
-          checkAndSavePendingVideo();
-        }, 1000);
+        // Read extension logs in background (non-blocking)
+        ScreenCapture.getExtensionLogs?.()
+          .then(logs => {
+            if (logs) {
+              console.log('[ScreenCapture] Extension logs:\n' + logs.slice(-2000));
+            }
+          })
+          .catch(() => {});
       }
       appStateRef.current = nextAppState;
     });
 
-    // Also check on initial mount
-    checkAndSavePendingVideo();
-
     return () => {
       subscription.remove();
     };
-  }, [checkAndSavePendingVideo]);
+  }, []);
 
   // Set up event listeners for native module events
   useEffect(() => {
@@ -255,11 +188,6 @@ export const useScreenCapture = (): UseScreenCaptureReturn => {
 
       setState(initialState);
       
-      // Check for pending video after a delay (extension needs time to merge)
-      setTimeout(() => {
-        checkAndSavePendingVideo();
-      }, 3000);
-      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to stop recording';
       console.log('[ScreenCapture] Stop error:', errorMessage);
@@ -269,7 +197,7 @@ export const useScreenCapture = (): UseScreenCaptureReturn => {
         error: errorMessage,
       }));
     }
-  }, [state.recordingId, state.startTime, checkAndSavePendingVideo]);
+  }, [state.recordingId, state.startTime]);
 
   return {
     state,
@@ -277,7 +205,6 @@ export const useScreenCapture = (): UseScreenCaptureReturn => {
     stopRecording,
     isRecording: state.status === RecordingStatus.RECORDING,
     requestPermissions,
-    checkAndSavePendingVideo,
   };
 };
 
