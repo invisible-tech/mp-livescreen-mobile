@@ -9,8 +9,10 @@ import {
   TouchableOpacity,
   Clipboard,
   Linking,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { launchImageLibrary } from 'react-native-image-picker';
 import {
   Container,
   Text,
@@ -22,6 +24,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useTask } from '@/context';
 import { useScreenCapture } from '@/hooks';
 import ScreenCapture from '@/native/ScreenCapture';
+import { ENV } from '@/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -39,6 +42,10 @@ export const HomeScreen: React.FC = () => {
   
   // Marketplace environment selection
   const [showMarketplaceModal, setShowMarketplaceModal] = useState(false);
+  
+  // ChatGPT specific state
+  const [selectedAIAppType, setSelectedAIAppType] = useState<AIAppType | null>(null);
+  const [isUploadingChatGPT, setIsUploadingChatGPT] = useState(false);
   
   // Task completion state
   const [taskCompleted, setTaskCompleted] = useState(false);
@@ -103,8 +110,7 @@ export const HomeScreen: React.FC = () => {
   // Handle AI app selection
   const handleAIAppSelect = useCallback((appType: AIAppType) => {
     setShowAIAppModal(false);
-    setAiAppSelected(true);
-    setRecordingStartTime(Date.now());
+    setSelectedAIAppType(appType);
     setCompletedTaskName(taskParams?.campaignName || 'Task');
     
     // Save the AI app type (fire and forget)
@@ -112,6 +118,27 @@ export const HomeScreen: React.FC = () => {
       ...taskParams,
       aiAppType: appType,
     }).catch(() => {});
+    
+    if (appType === 'chatgpt') {
+      // Show instructions for ChatGPT
+      Alert.alert(
+        '📱 ChatGPT Export Required',
+        'After your ChatGPT conversation:\n\n1. In ChatGPT app, tap the share icon\n2. Export the conversation as video to Photos\n3. Return here and tap "Submit task"\n\nTap OK to start recording.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setAiAppSelected(true);
+              setRecordingStartTime(Date.now());
+            },
+          },
+        ],
+      );
+    } else {
+      // Gemini - proceed directly
+      setAiAppSelected(true);
+      setRecordingStartTime(Date.now());
+    }
   }, [taskParams]);
 
   // Poll broadcast state when AI app is selected
@@ -164,9 +191,8 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [aiAppSelected, broadcastStarted, recordingStartTime]);
 
-  // Handle Submit task
-  const handleSubmitTask = useCallback(() => {
-    // Clear all state
+  // Clear task and reset UI
+  const resetTaskState = useCallback(() => {
     setTaskCompleted(false);
     setAiAppSelected(false);
     setRecordingDuration(0);
@@ -174,10 +200,100 @@ export const HomeScreen: React.FC = () => {
     setCompletedTaskName(null);
     setRecordingStartTime(null);
     setBroadcastStarted(false);
-    
-    // Clear task from context
+    setSelectedAIAppType(null);
+    setIsUploadingChatGPT(false);
     clearTaskParams();
   }, [clearTaskParams]);
+
+  // Upload ChatGPT video to backend
+  const uploadChatGPTVideo = useCallback(async (videoUri: string) => {
+    if (!taskParams) return;
+    
+    setIsUploadingChatGPT(true);
+    
+    try {
+      const formData = new FormData();
+      
+      // Add video file
+      formData.append('file', {
+        uri: videoUri,
+        type: 'video/mp4',
+        name: 'chatgpt_export.mp4',
+      } as any);
+      
+      // Add metadata
+      formData.append('tenant_id', taskParams.tenantId || '');
+      formData.append('campaign_id', taskParams.campaignId || '');
+      formData.append('task_id', taskParams.taskId || '');
+      formData.append('step_id', taskParams.stepId || '');
+      formData.append('recording_id', `chatgpt_${Date.now()}`);
+      formData.append('chunk_index', '0');
+      formData.append('is_final', 'true');
+      formData.append('app_type', 'chatgpt');
+      
+      // Use the same URL as the extension
+      const apiBaseUrl = 'https://vdi-dev-ali.invsta.systems';
+      console.log('[ChatGPT Upload] URL:', `${apiBaseUrl}/api/upload-mobile-content`);
+      console.log('[ChatGPT Upload] Video URI:', videoUri);
+      console.log('[ChatGPT Upload] Task params:', JSON.stringify(taskParams));
+      
+      const response = await fetch(`${apiBaseUrl}/api/upload-mobile-content`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      const responseText = await response.text();
+      console.log('[ChatGPT Upload] Response status:', response.status);
+      console.log('[ChatGPT Upload] Response body:', responseText);
+      
+      if (response.ok) {
+        Alert.alert('Success', 'ChatGPT video uploaded successfully!');
+        resetTaskState();
+      } else {
+        Alert.alert('Upload Failed', `Server error: ${response.status}\n${responseText}`);
+        setIsUploadingChatGPT(false);
+      }
+    } catch (error: any) {
+      console.error('[ChatGPT Upload] Error:', error);
+      Alert.alert('Upload Failed', `Error: ${error.message || 'Unknown error'}`);
+      setIsUploadingChatGPT(false);
+    }
+  }, [taskParams, resetTaskState]);
+
+  // Handle Submit task
+  const handleSubmitTask = useCallback(() => {
+    if (selectedAIAppType === 'chatgpt') {
+      // Show video picker for ChatGPT
+      launchImageLibrary(
+        {
+          mediaType: 'video',
+          selectionLimit: 1,
+        },
+        (response) => {
+          if (response.didCancel) {
+            // User cancelled - do nothing
+            return;
+          }
+          if (response.errorCode) {
+            Alert.alert('Error', response.errorMessage || 'Failed to open photo library');
+            return;
+          }
+          if (response.assets && response.assets.length > 0) {
+            const videoUri = response.assets[0].uri;
+            if (videoUri) {
+              uploadChatGPTVideo(videoUri);
+            }
+          }
+        },
+      );
+    } else {
+      // Gemini - just reset
+      resetTaskState();
+    }
+  }, [selectedAIAppType, uploadChatGPTVideo, resetTaskState]);
 
   // Copy to clipboard
   const handleCopy = useCallback((text: string, label: string) => {
@@ -360,13 +476,24 @@ export const HomeScreen: React.FC = () => {
       <View style={[styles.buttonContainer, { backgroundColor: theme.colors.background }]}>
         {/* Task Completed - Show Submit button */}
         {taskCompleted && !isRecording ? (
-          <TouchableOpacity
-            style={styles.submitTaskButton}
-            onPress={handleSubmitTask}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.submitTaskButtonText}>Submit task</Text>
-          </TouchableOpacity>
+          isUploadingChatGPT ? (
+            <View style={styles.uploadingContainer}>
+              <ActivityIndicator size="large" color="#10B981" />
+              <Text style={[styles.uploadingText, { color: theme.colors.text }]}>
+                Uploading ChatGPT video...
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.submitTaskButton}
+              onPress={handleSubmitTask}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.submitTaskButtonText}>
+                {selectedAIAppType === 'chatgpt' ? 'Select ChatGPT video & Submit' : 'Submit task'}
+              </Text>
+            </TouchableOpacity>
+          )
         ) : !aiAppSelected && hasTask && !isRecording ? (
           /* Has task, no AI app selected - show Start task button */
           <TouchableOpacity
@@ -615,6 +742,17 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  uploadingContainer: {
+    width: '100%',
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  uploadingText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
   submitTaskButton: {
     width: '100%',
