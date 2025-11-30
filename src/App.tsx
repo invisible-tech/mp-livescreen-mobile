@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StatusBar, Linking } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeProvider, useTheme, TaskProvider, useTask, parseDeepLink, RecordingProvider } from '@/context';
+import { ThemeProvider, useTheme, TaskProvider, useTask, parseDeepLink, RecordingProvider, ServerEnvProvider, useServerEnv } from '@/context';
 import { RootNavigator } from '@/navigation';
 import { SplashScreen } from '@/screens';
 import { lightTheme, darkTheme } from '@/theme';
@@ -37,6 +37,7 @@ const AppNavigationTheme = {
 const AppContent: React.FC = () => {
   const { isDark } = useTheme();
   const { setTaskParams } = useTask();
+  const { apiBaseUrl } = useServerEnv();
   const [showSplash, setShowSplash] = useState(true);
 
   // Handle deep links
@@ -48,7 +49,7 @@ const AppContent: React.FC = () => {
       
       if (params) {
         console.log('[App] Setting task params...');
-        setTaskParams(params);
+        setTaskParams(params, apiBaseUrl);
       } else {
         console.log('[App] Failed to parse deep link params');
       }
@@ -78,7 +79,7 @@ const AppContent: React.FC = () => {
     return () => {
       subscription.remove();
     };
-  }, [setTaskParams]);
+  }, [setTaskParams, apiBaseUrl]);
 
   const handleSplashComplete = () => {
     setShowSplash(false);
@@ -115,11 +116,13 @@ const App: React.FC = () => {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <TaskProvider>
-          <RecordingProvider>
-            <AppContent />
-          </RecordingProvider>
-        </TaskProvider>
+        <ServerEnvProvider>
+          <TaskProvider>
+            <RecordingProvider>
+              <AppContent />
+            </RecordingProvider>
+          </TaskProvider>
+        </ServerEnvProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

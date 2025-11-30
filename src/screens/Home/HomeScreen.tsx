@@ -21,10 +21,9 @@ import {
   UploadStatus,
 } from '@/components';
 import { useTheme } from '@/context/ThemeContext';
-import { useTask } from '@/context';
+import { useTask, useServerEnv } from '@/context';
 import { useScreenCapture } from '@/hooks';
 import ScreenCapture from '@/native/ScreenCapture';
-import { ENV } from '@/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -35,13 +34,11 @@ export const HomeScreen: React.FC = () => {
   const { theme } = useTheme();
   const { taskParams, hasTask, clearTaskParams } = useTask();
   const { state, isRecording } = useScreenCapture();
+  const { apiBaseUrl, marketplaceUrl } = useServerEnv();
   
   // AI App selection state
   const [showAIAppModal, setShowAIAppModal] = useState(false);
   const [aiAppSelected, setAiAppSelected] = useState(false);
-  
-  // Marketplace environment selection
-  const [showMarketplaceModal, setShowMarketplaceModal] = useState(false);
   
   // ChatGPT specific state
   const [selectedAIAppType, setSelectedAIAppType] = useState<AIAppType | null>(null);
@@ -97,10 +94,34 @@ export const HomeScreen: React.FC = () => {
     }
   }, [isRecording, pulseAnim, glowAnim]);
 
+  // Open Marketplace in Chrome
+  const handleOpenMarketplace = useCallback(() => {
+    // Try to open in Chrome, fallback to default browser
+    const chromeUrl = `googlechrome://${marketplaceUrl.replace(/^https?:\/\//, '')}`;
+    Linking.canOpenURL(chromeUrl)
+      .then(canOpen => {
+        if (canOpen) {
+          Linking.openURL(chromeUrl);
+        } else {
+          Linking.openURL(marketplaceUrl);
+        }
+      })
+      .catch(() => {
+        Linking.openURL(marketplaceUrl);
+      });
+  }, [marketplaceUrl]);
+
   // Handle Start task button when no task
   const handleNoTask = useCallback(() => {
-    setShowMarketplaceModal(true);
-  }, []);
+    Alert.alert(
+      'Start task',
+      'Open Marketplace and start a task.\n\nMake sure you have Chrome app installed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Marketplace', onPress: handleOpenMarketplace },
+      ],
+    );
+  }, [handleOpenMarketplace]);
 
   // Handle Start task button when has task
   const handleStartTask = useCallback(() => {
@@ -113,10 +134,11 @@ export const HomeScreen: React.FC = () => {
     setSelectedAIAppType(appType);
     setCompletedTaskName(taskParams?.campaignName || 'Task');
     
-    // Save the AI app type (fire and forget)
+    // Save the AI app type and API URL (fire and forget)
     ScreenCapture.setTaskParams({
       ...taskParams,
       aiAppType: appType,
+      apiBaseUrl: apiBaseUrl,
     }).catch(() => {});
     
     if (appType === 'chatgpt') {
@@ -139,7 +161,7 @@ export const HomeScreen: React.FC = () => {
       setAiAppSelected(true);
       setRecordingStartTime(Date.now());
     }
-  }, [taskParams]);
+  }, [taskParams, apiBaseUrl]);
 
   // Poll broadcast state when AI app is selected
   useEffect(() => {
@@ -231,8 +253,6 @@ export const HomeScreen: React.FC = () => {
       formData.append('is_final', 'true');
       formData.append('app_type', 'chatgpt');
       
-      // Use the same URL as the extension
-      const apiBaseUrl = 'https://vdi-dev-ali.invsta.systems';
       console.log('[ChatGPT Upload] URL:', `${apiBaseUrl}/api/upload-mobile-content`);
       console.log('[ChatGPT Upload] Video URI:', videoUri);
       console.log('[ChatGPT Upload] Task params:', JSON.stringify(taskParams));
@@ -261,7 +281,7 @@ export const HomeScreen: React.FC = () => {
       Alert.alert('Upload Failed', `Error: ${error.message || 'Unknown error'}`);
       setIsUploadingChatGPT(false);
     }
-  }, [taskParams, resetTaskState]);
+  }, [taskParams, resetTaskState, apiBaseUrl]);
 
   // Handle Submit task
   const handleSubmitTask = useCallback(() => {
@@ -301,24 +321,6 @@ export const HomeScreen: React.FC = () => {
     Alert.alert('Copied', `${label} copied to clipboard`);
   }, []);
 
-  // Open Marketplace in Chrome
-  const handleOpenMarketplace = useCallback((url: string) => {
-    setShowMarketplaceModal(false);
-    // Try to open in Chrome, fallback to default browser
-    const chromeUrl = `googlechrome://${url.replace(/^https?:\/\//, '')}`;
-    Linking.canOpenURL(chromeUrl)
-      .then(canOpen => {
-        if (canOpen) {
-          Linking.openURL(chromeUrl);
-        } else {
-          Linking.openURL(url);
-        }
-      })
-      .catch(() => {
-        Linking.openURL(url);
-      });
-  }, []);
-
   // Format duration as MM:SS
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -349,26 +351,26 @@ export const HomeScreen: React.FC = () => {
               </Text>
             </View>
             <View style={styles.copyRow}>
-              <Text variant="body" color={theme.colors.text} style={styles.taskValue}>
-                {taskParams.campaignName}
-              </Text>
               <TouchableOpacity
                 onPress={() => handleCopy(taskParams.campaignName || '', 'Campaign name')}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Icon name="copy-outline" size={16} color={theme.colors.textSecondary} />
               </TouchableOpacity>
+              <Text variant="body" color={theme.colors.text} style={styles.taskValue}>
+                {taskParams.campaignName}
+              </Text>
             </View>
             <View style={styles.copyRow}>
-              <Text variant="bodySmall" color={theme.colors.textSecondary} style={styles.taskIdText}>
-                {taskParams.taskId}
-              </Text>
               <TouchableOpacity
                 onPress={() => handleCopy(taskParams.taskId || '', 'Task ID')}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Icon name="copy-outline" size={14} color={theme.colors.textSecondary} />
               </TouchableOpacity>
+              <Text variant="bodySmall" color={theme.colors.textSecondary} style={styles.taskIdText}>
+                {taskParams.taskId}
+              </Text>
             </View>
           </View>
         )}
@@ -383,26 +385,26 @@ export const HomeScreen: React.FC = () => {
               </Text>
             </View>
             <View style={styles.copyRow}>
-              <Text variant="body" color={theme.colors.text} style={styles.taskValue}>
-                {completedTaskName || 'Task'}
-              </Text>
               <TouchableOpacity
                 onPress={() => handleCopy(completedTaskName || '', 'Campaign name')}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Icon name="copy-outline" size={16} color={theme.colors.textSecondary} />
               </TouchableOpacity>
+              <Text variant="body" color={theme.colors.text} style={styles.taskValue}>
+                {completedTaskName || 'Task'}
+              </Text>
             </View>
             <View style={styles.copyRow}>
-              <Text variant="bodySmall" color={theme.colors.textSecondary} style={styles.taskIdText}>
-                {taskParams?.taskId}
-              </Text>
               <TouchableOpacity
                 onPress={() => handleCopy(taskParams?.taskId || '', 'Task ID')}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Icon name="copy-outline" size={14} color={theme.colors.textSecondary} />
               </TouchableOpacity>
+              <Text variant="bodySmall" color={theme.colors.textSecondary} style={styles.taskIdText}>
+                {taskParams?.taskId}
+              </Text>
             </View>
             <View style={styles.completionStats}>
               <View style={styles.statRow}>
@@ -427,7 +429,7 @@ export const HomeScreen: React.FC = () => {
               Open{' '}
               <Text
                 style={styles.marketplaceLink}
-                onPress={() => setShowMarketplaceModal(true)}
+                onPress={handleOpenMarketplace}
               >
                 Marketplace
               </Text>
@@ -485,7 +487,7 @@ export const HomeScreen: React.FC = () => {
             </View>
           ) : (
             <TouchableOpacity
-              style={styles.submitTaskButton}
+              style={[styles.submitTaskButton, { backgroundColor: theme.colors.success }]}
               onPress={handleSubmitTask}
               activeOpacity={0.8}
             >
@@ -497,7 +499,7 @@ export const HomeScreen: React.FC = () => {
         ) : !aiAppSelected && hasTask && !isRecording ? (
           /* Has task, no AI app selected - show Start task button */
           <TouchableOpacity
-            style={styles.startTaskButton}
+            style={[styles.startTaskButton, { backgroundColor: theme.colors.primary }]}
             onPress={handleStartTask}
             activeOpacity={0.8}
           >
@@ -506,7 +508,7 @@ export const HomeScreen: React.FC = () => {
         ) : !hasTask && !isRecording ? (
           /* No task - show disabled-looking button */
           <TouchableOpacity
-            style={[styles.startTaskButton, styles.startTaskButtonDisabled]}
+            style={[styles.startTaskButton, styles.startTaskButtonDisabled, { backgroundColor: theme.colors.textSecondary }]}
             onPress={handleNoTask}
             activeOpacity={0.8}
           >
@@ -532,33 +534,27 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-              Select AI App
+              Select app
             </Text>
             <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
-              Which AI app will you be using?
+              Which app will you be using?
             </Text>
             
             <TouchableOpacity
-              style={[styles.appOption, { borderColor: theme.colors.border }]}
+              style={[styles.appOption, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
               onPress={() => handleAIAppSelect('gemini')}
             >
               <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
                 🤖 Gemini
               </Text>
-              <Text style={[styles.appOptionHint, { color: theme.colors.success }]}>
-                Full audio support
-              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.appOption, { borderColor: theme.colors.border }]}
+              style={[styles.appOption, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
               onPress={() => handleAIAppSelect('chatgpt')}
             >
               <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
                 💬 ChatGPT
-              </Text>
-              <Text style={[styles.appOptionHint, { color: theme.colors.warning }]}>
-                Screen only (voice limited)
               </Text>
             </TouchableOpacity>
             
@@ -574,60 +570,6 @@ export const HomeScreen: React.FC = () => {
         </View>
       </Modal>
 
-      {/* Marketplace Environment Selection Modal */}
-      <Modal
-        visible={showMarketplaceModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowMarketplaceModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-              Start task
-            </Text>
-            <Text style={[styles.chromeWarning, { color: theme.colors.text }]}>
-              Make sure you have Chrome app installed
-            </Text>
-            
-            <TouchableOpacity
-              style={[styles.envOption, { borderColor: theme.colors.border }]}
-              onPress={() => handleOpenMarketplace('https://om.marketplace.qa.invsta.systems/')}
-            >
-              <Text style={[styles.envOptionText, { color: theme.colors.text }]}>
-                Open Marketplace (QA)
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.envOption, { borderColor: theme.colors.border }]}
-              onPress={() => handleOpenMarketplace('https://om.marketplace.invsta.systems/')}
-            >
-              <Text style={[styles.envOptionText, { color: theme.colors.text }]}>
-                Open Marketplace (Staging)
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.envOption, { borderColor: theme.colors.border }]}
-              onPress={() => handleOpenMarketplace('https://om.marketplace.inv.tech/')}
-            >
-              <Text style={[styles.envOptionText, { color: theme.colors.text }]}>
-                Open Marketplace (Prod)
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setShowMarketplaceModal(false)}
-            >
-              <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -716,7 +658,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#000000',
   },
   startTaskButtonDisabled: {
     opacity: 0.5,
@@ -760,7 +701,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
   },
   submitTaskButtonText: {
     color: '#FFFFFF',
@@ -845,30 +785,10 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     textDecorationLine: 'underline',
   },
-  chromeWarning: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  envOption: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  envOptionText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
   appOptionText: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 4,
-  },
-  appOptionHint: {
-    fontSize: 13,
   },
   cancelButton: {
     marginTop: 8,

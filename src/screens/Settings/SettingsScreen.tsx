@@ -10,7 +10,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import DeviceInfo from 'react-native-device-info';
 import { Text, ScreenTitle } from '@/components';
 import { useTheme } from '@/context/ThemeContext';
-import { APP_CONFIG } from '@/config';
+import { useServerEnv } from '@/context/ServerEnvContext';
+import { SERVER_ENVIRONMENTS, type ServerEnvironment } from '@/config';
 import type { ThemeMode } from '@/types';
 
 interface SettingItemProps {
@@ -106,6 +107,7 @@ const SettingSection: React.FC<SettingSectionProps> = ({ title, children }) => {
 
 export const SettingsScreen: React.FC = () => {
   const { theme, themeMode, setThemeMode, isDark } = useTheme();
+  const { serverEnv, setServerEnv, envLabel } = useServerEnv();
 
   const handleThemeToggle = useCallback(() => {
     const newMode: ThemeMode = isDark ? 'light' : 'dark';
@@ -116,6 +118,10 @@ export const SettingsScreen: React.FC = () => {
     setThemeMode('system');
   }, [setThemeMode]);
 
+  const handleServerEnvSelect = useCallback((env: ServerEnvironment) => {
+    setServerEnv(env);
+  }, [setServerEnv]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScreenTitle title="Settings" />
@@ -124,6 +130,35 @@ export const SettingsScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Backend Server Section */}
+        <SettingSection title="Backend Server">
+          {(Object.keys(SERVER_ENVIRONMENTS) as ServerEnvironment[]).map((env) => (
+            <SettingItem
+              key={env}
+              icon="server-outline"
+              title={SERVER_ENVIRONMENTS[env].label}
+              onPress={() => handleServerEnvSelect(env)}
+              rightElement={
+                <View
+                  style={[
+                    styles.checkmark,
+                    {
+                      backgroundColor:
+                        serverEnv === env ? theme.colors.primary : theme.colors.transparent,
+                      borderColor:
+                        serverEnv === env ? theme.colors.primary : theme.colors.border,
+                    },
+                  ]}
+                >
+                  {serverEnv === env && (
+                    <Icon name="checkmark" size={14} color={theme.colors.white} />
+                  )}
+                </View>
+              }
+            />
+          ))}
+        </SettingSection>
+
         {/* Appearance Section */}
         <SettingSection title="Appearance">
           <SettingItem
@@ -171,7 +206,7 @@ export const SettingsScreen: React.FC = () => {
       {/* Version Footer - Fixed at bottom */}
       <View style={styles.versionFooter}>
         <Text variant="caption" color={theme.colors.textTertiary} align="center">
-          {DeviceInfo.getVersion()}.{DeviceInfo.getBuildNumber()} ({APP_CONFIG.ENV})
+          {DeviceInfo.getVersion()}.{DeviceInfo.getBuildNumber()} • {envLabel}
         </Text>
       </View>
     </View>

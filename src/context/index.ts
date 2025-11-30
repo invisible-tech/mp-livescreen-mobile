@@ -3,4 +3,5 @@ export { TaskProvider, useTask, parseDeepLink, default as TaskContext } from './
 export type { TaskParams } from './TaskContext';
 export { RecordingProvider, useRecording, default as RecordingContext } from './RecordingContext';
 export type { UploadStatus, RecordingState } from './RecordingContext';
+export { ServerEnvProvider, useServerEnv, default as ServerEnvContext } from './ServerEnvContext';
 

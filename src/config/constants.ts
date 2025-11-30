@@ -1,8 +1,38 @@
 import Config from 'react-native-config';
 
+// Server Environment Types
+export type ServerEnvironment = 'production' | 'staging' | 'dev' | 'ali';
+
+// Server Environment Configuration
+export const SERVER_ENVIRONMENTS: Record<ServerEnvironment, { apiBaseUrl: string; marketplaceUrl: string; label: string }> = {
+  production: {
+    apiBaseUrl: 'https://vdi.inv.tech',
+    marketplaceUrl: 'https://marketplace.inv.tech',
+    label: 'Production',
+  },
+  staging: {
+    apiBaseUrl: 'https://vdi-voice-demo.invsta.systems',
+    marketplaceUrl: 'https://marketplace.invsta.systems',
+    label: 'Staging',
+  },
+  dev: {
+    apiBaseUrl: 'https://vdi-dev.invsta.systems',
+    marketplaceUrl: 'https://marketplace.qa.invsta.systems',
+    label: 'Dev',
+  },
+  ali: {
+    apiBaseUrl: 'https://vdi-dev-ali.invsta.systems',
+    marketplaceUrl: 'https://marketplace.qa.invsta.systems',
+    label: 'Ali (Dev)',
+  },
+};
+
+// Default server environment
+export const DEFAULT_SERVER_ENV: ServerEnvironment = 'ali';
+
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: Config.API_BASE_URL || 'https://vdi-dev-ali.invsta.systems',
+  BASE_URL: Config.API_BASE_URL || SERVER_ENVIRONMENTS[DEFAULT_SERVER_ENV].apiBaseUrl,
   API_KEY: Config.API_KEY || '',
   TIMEOUT: 30000,
   CHUNK_TIMEOUT: 60000,
@@ -42,6 +72,7 @@ export const STORAGE_KEYS = {
   VIDEO_QUALITY: '@mp_live_screen/video_quality',
   FRAME_RATE: '@mp_live_screen/frame_rate',
   RTMP_URL: '@mp_live_screen/rtmp_url',
+  SERVER_ENV: '@mp_live_screen/server_env',
 };
 
 // Platform specific

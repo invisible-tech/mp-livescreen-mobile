@@ -14,7 +14,7 @@ export interface TaskParams {
 
 interface TaskContextValue {
   taskParams: TaskParams | null;
-  setTaskParams: (params: TaskParams | null) => void;
+  setTaskParams: (params: TaskParams | null, apiBaseUrl?: string) => void;
   clearTaskParams: () => void;
   hasTask: boolean;
 }
@@ -28,7 +28,7 @@ interface TaskProviderProps {
 export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
   const [taskParams, setTaskParamsState] = useState<TaskParams | null>(null);
 
-  const setTaskParams = useCallback(async (params: TaskParams | null) => {
+  const setTaskParams = useCallback(async (params: TaskParams | null, apiBaseUrl?: string) => {
     setTaskParamsState(params);
     
     if (params) {
@@ -40,12 +40,12 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       // Save to App Group for Broadcast Extension access (iOS only)
       if (Platform.OS === 'ios' && ScreenCaptureModule?.setTaskParams) {
         try {
-          // Include API base URL from .env config
+          const url = apiBaseUrl || API_CONFIG.BASE_URL;
           await ScreenCaptureModule.setTaskParams({
             ...params,
-            apiBaseUrl: API_CONFIG.BASE_URL,
+            apiBaseUrl: url,
           });
-          console.log('[TaskContext] Task params saved to App Group (apiBaseUrl:', API_CONFIG.BASE_URL, ')');
+          console.log('[TaskContext] Task params saved to App Group (apiBaseUrl:', url, ')');
         } catch (error) {
           console.error('[TaskContext] Failed to save task params to App Group:', error);
         }
