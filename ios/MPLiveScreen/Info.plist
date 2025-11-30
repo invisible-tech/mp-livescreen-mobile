@@ -52,6 +52,8 @@
 	<string>Record your voice during screen capture for voice calls and narration</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save screen recordings to your photo library</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select videos from your photo library to upload</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>
