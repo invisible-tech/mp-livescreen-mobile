@@ -33,6 +33,7 @@ interface TaskParams {
   campaignName?: string;
   stepId?: string;
   taskId?: string;
+  taskType?: 'audio-video' | 'audio';
   apiBaseUrl?: string;
   aiAppType?: 'gemini' | 'chatgpt';
 }

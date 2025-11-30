@@ -13,6 +13,9 @@ export interface ChunkUploadParams {
   recordingId: string;
   chunkIndex: number;
   isFinal: boolean;
+  appType?: 'gemini' | 'chatgpt';
+  osType?: 'ios' | 'android';
+  taskType?: 'audio-video' | 'audio';
 }
 
 export interface ChunkUploadResult {
@@ -39,6 +42,9 @@ export const uploadVideoChunk = async (
     recordingId,
     chunkIndex,
     isFinal,
+    appType,
+    osType,
+    taskType,
   } = params;
 
   const formData = new FormData();
@@ -58,6 +64,16 @@ export const uploadVideoChunk = async (
   formData.append('recording_id', recordingId);
   formData.append('chunk_index', String(chunkIndex));
   formData.append('is_final', String(isFinal));
+  
+  // Add app type and platform info
+  if (appType) {
+    formData.append('app_type', appType);
+  }
+  if (osType) {
+    formData.append('os_type', osType);
+  }
+  // Add task type (default to 'audio-video' if not provided)
+  formData.append('task_type', taskType || 'audio-video');
 
   const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.UPLOAD_MOBILE_CONTENT}`;
   

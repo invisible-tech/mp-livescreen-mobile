@@ -47,7 +47,7 @@ export const MainTabNavigator: React.FC = () => {
           paddingTop: 8,
           height: 85,
         },
-        tabBarActiveTintColor: theme.colors.primary,
+        tabBarActiveTintColor: theme.colors.text,
         tabBarInactiveTintColor: theme.colors.textTertiary,
         tabBarLabelStyle: {
           fontSize: 12,

@@ -10,6 +10,7 @@ export interface TaskParams {
   campaignName: string;
   stepId: string;
   taskId: string;
+  taskType: 'audio-video' | 'audio';
 }
 
 interface TaskContextValue {
@@ -112,8 +113,9 @@ export const parseDeepLink = (url: string): TaskParams | null => {
     const campaignName = params.get('campaign_name');
     const stepId = params.get('step_id');
     const taskId = params.get('task_id');
+    const taskType = params.get('task_type') as 'audio-video' | 'audio' | null;
 
-    console.log('[TaskContext] Parsed params:', { tenantId, campaignId, campaignName, stepId, taskId });
+    console.log('[TaskContext] Parsed params:', { tenantId, campaignId, campaignName, stepId, taskId, taskType });
 
     if (!tenantId || !campaignId || !campaignName || !stepId || !taskId) {
       console.log('[TaskContext] Missing required params in deep link');
@@ -126,6 +128,7 @@ export const parseDeepLink = (url: string): TaskParams | null => {
       campaignName: decodeURIComponent(campaignName),
       stepId,
       taskId,
+      taskType: taskType || 'audio-video', // Default to 'audio-video' if not provided
     };
     
     console.log('[TaskContext] Successfully parsed:', result);

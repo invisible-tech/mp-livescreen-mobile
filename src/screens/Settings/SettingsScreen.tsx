@@ -40,6 +40,8 @@ const SettingItem: React.FC<SettingItemProps> = ({
         {
           backgroundColor: theme.colors.surface,
           borderRadius: theme.borderRadius.md,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
         },
       ]}
     >
@@ -52,7 +54,7 @@ const SettingItem: React.FC<SettingItemProps> = ({
           },
         ]}
       >
-        <Icon name={icon} size={20} color={theme.colors.primary} />
+        <Icon name={icon} size={20} color={theme.colors.text} />
       </View>
       <View style={styles.settingContent}>
         <Text variant="body" weight="medium">
@@ -139,21 +141,9 @@ export const SettingsScreen: React.FC = () => {
               title={SERVER_ENVIRONMENTS[env].label}
               onPress={() => handleServerEnvSelect(env)}
               rightElement={
-                <View
-                  style={[
-                    styles.checkmark,
-                    {
-                      backgroundColor:
-                        serverEnv === env ? theme.colors.primary : theme.colors.transparent,
-                      borderColor:
-                        serverEnv === env ? theme.colors.primary : theme.colors.border,
-                    },
-                  ]}
-                >
-                  {serverEnv === env && (
-                    <Icon name="checkmark" size={14} color={theme.colors.white} />
-                  )}
-                </View>
+                serverEnv === env ? (
+                  <Icon name="checkmark" size={22} color={theme.colors.text} />
+                ) : null
               }
             />
           ))}
@@ -171,9 +161,9 @@ export const SettingsScreen: React.FC = () => {
                 onValueChange={handleThemeToggle}
                 trackColor={{
                   false: theme.colors.border,
-                  true: theme.colors.primaryLight,
+                  true: theme.colors.text,
                 }}
-                thumbColor={isDark ? theme.colors.primary : theme.colors.white}
+                thumbColor={isDark ? theme.colors.background : theme.colors.white}
               />
             }
           />
@@ -183,21 +173,9 @@ export const SettingsScreen: React.FC = () => {
             subtitle={themeMode === 'system' ? 'Enabled' : 'Disabled'}
             onPress={handleSystemTheme}
             rightElement={
-              <View
-                style={[
-                  styles.checkmark,
-                  {
-                    backgroundColor:
-                      themeMode === 'system' ? theme.colors.primary : theme.colors.transparent,
-                    borderColor:
-                      themeMode === 'system' ? theme.colors.primary : theme.colors.border,
-                  },
-                ]}
-              >
-                {themeMode === 'system' && (
-                  <Icon name="checkmark" size={14} color={theme.colors.white} />
-                )}
-              </View>
+              themeMode === 'system' ? (
+                <Icon name="checkmark" size={22} color={theme.colors.text} />
+              ) : null
             }
           />
         </SettingSection>
@@ -205,10 +183,10 @@ export const SettingsScreen: React.FC = () => {
 
       {/* Version Footer - Fixed at bottom */}
       <View style={styles.versionFooter}>
-        <Text variant="caption" color={theme.colors.textTertiary} align="center">
+          <Text variant="caption" color={theme.colors.textSecondary} align="center">
           {DeviceInfo.getVersion()}.{DeviceInfo.getBuildNumber()} • {envLabel}
-        </Text>
-      </View>
+          </Text>
+        </View>
     </View>
   );
 };
@@ -249,14 +227,6 @@ const styles = StyleSheet.create({
   },
   settingContent: {
     flex: 1,
-  },
-  checkmark: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   versionFooter: {
     position: 'absolute',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,11 +7,16 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
+import Video, { VideoRef } from 'react-native-video';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Text } from '@/components/Text';
 import { useTheme } from '@/context/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Video assets
+const geminiVideo = require('@/assets/images/gemini_tutorial.mp4');
+const chatgptVideo = require('@/assets/images/chatgpt_tutorial.mp4');
 
 type TabType = 'gemini' | 'chatgpt';
 
@@ -23,22 +28,40 @@ interface HelpModalProps {
 export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
   const { theme } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('gemini');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<VideoRef>(null);
 
-  const renderVideoPlaceholder = (appType: TabType) => {
-    const isGemini = appType === 'gemini';
+  const handlePlayPause = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  const renderVideoPlayer = (appType: TabType) => {
+    const videoSource = appType === 'gemini' ? geminiVideo : chatgptVideo;
+    
     return (
       <View style={[styles.videoContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <View style={[styles.videoPlaceholder, { borderColor: theme.colors.border }]}>
-          <View style={[styles.playButton, { backgroundColor: isGemini ? '#4285F4' : '#10A37F' }]}>
-            <Icon name="play" size={32} color="#FFFFFF" />
-          </View>
-          <Text style={[styles.videoLabel, { color: theme.colors.textSecondary }]}>
-            {isGemini ? '🤖 Gemini Tutorial' : '💬 ChatGPT Tutorial'}
-          </Text>
-          <Text style={[styles.videoDuration, { color: theme.colors.textTertiary }]}>
-            Video coming soon
-          </Text>
-        </View>
+        <TouchableOpacity 
+          style={styles.videoWrapper}
+          onPress={handlePlayPause}
+          activeOpacity={0.9}
+        >
+          <Video
+            ref={videoRef}
+            source={videoSource}
+            style={styles.video}
+            resizeMode="contain"
+            paused={!isPlaying || activeTab !== appType}
+            repeat
+            controls={false}
+          />
+          {!isPlaying && (
+            <View style={styles.playOverlay}>
+              <View style={[styles.playButton, { backgroundColor: theme.colors.text }]}>
+                <Icon name="play" size={32} color={theme.colors.background} />
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
     );
   };
@@ -46,9 +69,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
   const renderGeminiSteps = () => (
     <View style={styles.stepsContainer}>
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#4285F4' }]}>
-          <Text style={styles.stepNumberText}>1</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>1.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Start from Marketplace
@@ -60,9 +81,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#4285F4' }]}>
-          <Text style={styles.stepNumberText}>2</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>2.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Select Gemini
@@ -74,9 +93,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#4285F4' }]}>
-          <Text style={styles.stepNumberText}>3</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>3.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Start Recording
@@ -88,9 +105,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#4285F4' }]}>
-          <Text style={styles.stepNumberText}>4</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>4.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Have Your Conversation
@@ -102,9 +117,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#4285F4' }]}>
-          <Text style={styles.stepNumberText}>5</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>5.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Stop & Submit
@@ -120,9 +133,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
   const renderChatGPTSteps = () => (
     <View style={styles.stepsContainer}>
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#10A37F' }]}>
-          <Text style={styles.stepNumberText}>1</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>1.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Start from Marketplace
@@ -134,9 +145,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#10A37F' }]}>
-          <Text style={styles.stepNumberText}>2</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>2.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Select ChatGPT
@@ -148,9 +157,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#10A37F' }]}>
-          <Text style={styles.stepNumberText}>3</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>3.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Start Recording
@@ -162,9 +169,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#10A37F' }]}>
-          <Text style={styles.stepNumberText}>4</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>4.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Have Your Conversation
@@ -176,9 +181,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#10A37F' }]}>
-          <Text style={styles.stepNumberText}>5</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>5.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Export from ChatGPT
@@ -190,9 +193,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
       </View>
 
       <View style={styles.stepRow}>
-        <View style={[styles.stepNumber, { backgroundColor: '#10A37F' }]}>
-          <Text style={styles.stepNumberText}>6</Text>
-        </View>
+        <Text style={[styles.stepNumberText, { color: theme.colors.text }]}>6.</Text>
         <View style={styles.stepContent}>
           <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
             Stop & Submit
@@ -205,12 +206,23 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
     </View>
   );
 
+  // Reset video when switching tabs or closing modal
+  const handleTabChange = (tab: TabType) => {
+    setIsPlaying(false);
+    setActiveTab(tab);
+  };
+
+  const handleClose = () => {
+    setIsPlaying(false);
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
         <View style={[styles.content, { backgroundColor: theme.colors.surface }]}>
@@ -220,7 +232,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
               How to use
             </Text>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={handleClose}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Icon name="close" size={24} color={theme.colors.textSecondary} />
@@ -228,50 +240,50 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
           </View>
 
           {/* Tabs */}
-          <View style={[styles.tabContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+          <View style={[styles.tabContainer, { backgroundColor: theme.colors.backgroundSecondary, borderWidth: 1, borderColor: theme.colors.border }]}>
             <TouchableOpacity
               style={[
                 styles.tab,
                 activeTab === 'gemini' && styles.tabActive,
-                activeTab === 'gemini' && { backgroundColor: theme.colors.surface },
+                activeTab === 'gemini' && { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
               ]}
-              onPress={() => setActiveTab('gemini')}
+              onPress={() => handleTabChange('gemini')}
             >
               <Text style={[
                 styles.tabText,
-                { color: activeTab === 'gemini' ? '#4285F4' : theme.colors.textSecondary },
+                { color: activeTab === 'gemini' ? theme.colors.text : theme.colors.textSecondary },
                 activeTab === 'gemini' && styles.tabTextActive,
               ]}>
-                🤖 Gemini
+                Gemini
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.tab,
                 activeTab === 'chatgpt' && styles.tabActive,
-                activeTab === 'chatgpt' && { backgroundColor: theme.colors.surface },
+                activeTab === 'chatgpt' && { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
               ]}
-              onPress={() => setActiveTab('chatgpt')}
+              onPress={() => handleTabChange('chatgpt')}
             >
               <Text style={[
                 styles.tabText,
-                { color: activeTab === 'chatgpt' ? '#10A37F' : theme.colors.textSecondary },
+                { color: activeTab === 'chatgpt' ? theme.colors.text : theme.colors.textSecondary },
                 activeTab === 'chatgpt' && styles.tabTextActive,
               ]}>
-                💬 ChatGPT
+                ChatGPT
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Content */}
-          <View style={{ flex: 1 }}>
+          <View style={styles.scrollContainer}>
             <ScrollView 
               showsVerticalScrollIndicator={true}
               contentContainerStyle={styles.scrollContent}
               bounces={true}
             >
               {/* Video Section */}
-              {renderVideoPlaceholder(activeTab)}
+              {renderVideoPlayer(activeTab)}
 
               {/* Steps Section */}
               <View style={styles.stepsSection}>
@@ -285,10 +297,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ visible, onClose }) => {
 
           {/* Close Button */}
           <TouchableOpacity
-            style={[styles.closeButton, { backgroundColor: theme.colors.primary }]}
-            onPress={onClose}
+            style={[styles.closeButton, { backgroundColor: theme.colors.text }]}
+            onPress={handleClose}
           >
-            <Text style={styles.closeButtonText}>Got it</Text>
+            <Text style={[styles.closeButtonText, { color: theme.colors.background }]}>Got it</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -347,6 +359,9 @@ const styles = StyleSheet.create({
   tabTextActive: {
     fontWeight: '600',
   },
+  scrollContainer: {
+    flex: 1,
+  },
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 16,
@@ -355,15 +370,24 @@ const styles = StyleSheet.create({
     marginTop: 16,
     borderRadius: 16,
     overflow: 'hidden',
+    alignItems: 'center',
   },
-  videoPlaceholder: {
+  videoWrapper: {
+    width: '100%',
     aspectRatio: 16 / 9,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    margin: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   playButton: {
     width: 64,
@@ -371,20 +395,11 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
-  },
-  videoLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  videoDuration: {
-    fontSize: 13,
   },
   stepsSection: {
     marginTop: 20,
@@ -401,19 +416,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  stepNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2,
-  },
   stepNumberText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
+    marginRight: 8,
+    minWidth: 20,
   },
   stepContent: {
     flex: 1,
@@ -436,7 +443,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },

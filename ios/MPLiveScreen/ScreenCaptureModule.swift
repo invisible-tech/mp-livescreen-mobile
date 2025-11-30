@@ -330,6 +330,10 @@ class ScreenCaptureModule: NSObject {
       defaults.set(aiAppType, forKey: "aiAppType")
       NSLog("[ScreenCaptureModule] AI App type saved: \(aiAppType)")
     }
+    // Save task type (audio-video/audio), default to 'audio-video'
+    let taskType = params["taskType"] as? String ?? "audio-video"
+    defaults.set(taskType, forKey: "taskType")
+    NSLog("[ScreenCaptureModule] Task type saved: \(taskType)")
     
     defaults.synchronize()
     

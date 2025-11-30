@@ -78,6 +78,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var taskId: String?
     private var stepId: String?
     private var aiAppType: String?
+    private var taskType: String = "audio-video"  // Default to 'audio-video'
     
     // MARK: - Recording State
     
@@ -137,6 +138,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         taskId = defaults.string(forKey: "taskId")
         stepId = defaults.string(forKey: "stepId")
         aiAppType = defaults.string(forKey: "aiAppType")
+        taskType = defaults.string(forKey: "taskType") ?? "audio-video"  // Default to 'audio-video'
         
         if let savedApiUrl = defaults.string(forKey: "apiBaseUrl"), !savedApiUrl.isEmpty {
             apiBaseUrl = savedApiUrl
@@ -267,7 +269,7 @@ class SampleHandler: RPBroadcastSampleHandler {
                 // Start without audio after a short delay (some recordings have no audio)
                 configureAndStartWriter()
             }
-            return
+            return 
         }
         
         // Normal processing
@@ -735,9 +737,9 @@ class SampleHandler: RPBroadcastSampleHandler {
             try FileManager.default.copyItem(at: chunkURL, to: outputURL)
             
             if let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path),
-               let size = attrs[.size] as? Int64 {
+                   let size = attrs[.size] as? Int64 {
                 log.log("✅ Copied: \(size / 1024) KB")
-            }
+                }
             
             setVideoReadyFlag(path: outputURL.path)
             cleanupChunks()
@@ -794,7 +796,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         let fullURL = "\(apiBaseUrl)\(uploadEndpoint)"
         guard let url = URL(string: fullURL) else { 
             log.log("❌ Invalid URL: \(fullURL)")
-            return 
+            return
         }
         
         log.log("📍 URL: \(fullURL)")
@@ -853,7 +855,9 @@ class SampleHandler: RPBroadcastSampleHandler {
             "step_id": stepId,
             "recording_id": recordingId,
             "chunk_index": String(chunkIndex),
-            "is_final": String(isFinal)
+            "is_final": String(isFinal),
+            "os_type": "ios",
+            "task_type": taskType
         ]
         
         // Add app type if available

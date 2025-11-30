@@ -10,6 +10,7 @@ import {
   Clipboard,
   Linking,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -277,6 +278,8 @@ export const HomeScreen: React.FC = () => {
       formData.append('chunk_index', '0');
       formData.append('is_final', 'true');
       formData.append('app_type', 'chatgpt');
+      formData.append('os_type', Platform.OS);
+      formData.append('task_type', taskParams.taskType || 'audio-video');
       
       console.log('[ChatGPT Upload] URL:', `${apiBaseUrl}/api/upload-mobile-content`);
       console.log('[ChatGPT Upload] Video URI:', videoUri);
@@ -400,6 +403,25 @@ export const HomeScreen: React.FC = () => {
           </View>
         )}
 
+        {/* Selected App Indicator */}
+        {aiAppSelected && selectedAIAppType && hasTask && !taskCompleted && (
+          <View style={[styles.selectedAppContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <View style={styles.selectedAppRow}>
+              <Icon 
+                name={selectedAIAppType === 'gemini' ? 'sparkles' : 'chatbubble-ellipses'} 
+                size={18} 
+                color={theme.colors.text} 
+              />
+              <Text style={[styles.selectedAppText, { color: theme.colors.text }]}>
+                {selectedAIAppType === 'gemini' ? 'Gemini' : 'ChatGPT'} selected
+              </Text>
+            </View>
+            <Text style={[styles.taskTypeText, { color: theme.colors.textSecondary }]}>
+              Task type: {taskParams?.taskType || 'audio-video'}
+            </Text>
+          </View>
+        )}
+
         {/* Task Completed Card - with duration and chunks */}
         {taskCompleted && (
           <View style={[styles.taskBox, { borderColor: theme.colors.border }]}>
@@ -449,18 +471,18 @@ export const HomeScreen: React.FC = () => {
           <View style={[styles.taskBox, { borderColor: theme.colors.border }]}>
             <Text variant="body" color={theme.colors.text} align="center" style={styles.noTaskTitle}>
               No task selected
-            </Text>
+          </Text>
             <Text variant="body" color={theme.colors.textSecondary} align="center" style={styles.noTaskHintBold}>
               Open{' '}
-              <Text
+          <Text
                 style={styles.marketplaceLink}
                 onPress={handleOpenMarketplace}
               >
                 Marketplace
               </Text>
               {' '}and start a task
-            </Text>
-          </View>
+          </Text>
+        </View>
         )}
 
         {/* Live Badge when recording */}
@@ -474,7 +496,7 @@ export const HomeScreen: React.FC = () => {
             <View style={styles.liveBadge}>
               <View style={styles.liveDot} />
               <Text style={styles.liveText}>LIVE</Text>
-            </View>
+        </View>
           </Animated.View>
         )}
 
@@ -508,7 +530,7 @@ export const HomeScreen: React.FC = () => {
               <ActivityIndicator size="large" color="#10B981" />
               <Text style={[styles.uploadingText, { color: theme.colors.text }]}>
                 Uploading ChatGPT video...
-              </Text>
+                </Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -524,20 +546,20 @@ export const HomeScreen: React.FC = () => {
         ) : !aiAppSelected && hasTask && !isRecording ? (
           /* Has task, no AI app selected - show Start task button */
           <TouchableOpacity
-            style={[styles.startTaskButton, { backgroundColor: theme.colors.primary }]}
+            style={[styles.startTaskButton, { backgroundColor: theme.colors.text }]}
             onPress={handleStartTask}
             activeOpacity={0.8}
           >
-            <Text style={styles.startTaskButtonText}>Start task</Text>
+            <Text style={[styles.startTaskButtonText, { color: theme.colors.background }]}>Start task</Text>
           </TouchableOpacity>
         ) : !hasTask && !isRecording ? (
           /* No task - show disabled-looking button */
           <TouchableOpacity
-            style={[styles.startTaskButton, styles.startTaskButtonDisabled, { backgroundColor: theme.colors.textSecondary }]}
+            style={[styles.startTaskButton, styles.startTaskButtonDisabled, { backgroundColor: theme.colors.text }]}
             onPress={handleNoTask}
             activeOpacity={0.8}
           >
-            <Text style={styles.startTaskButtonText}>Start task</Text>
+            <Text style={[styles.startTaskButtonText, { color: theme.colors.background }]}>Start task</Text>
           </TouchableOpacity>
         ) : (
           /* AI app selected - show BroadcastPicker only */
@@ -570,7 +592,7 @@ export const HomeScreen: React.FC = () => {
               onPress={() => handleAIAppSelect('gemini')}
             >
               <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
-                🤖 Gemini
+                Gemini
               </Text>
             </TouchableOpacity>
             
@@ -579,7 +601,7 @@ export const HomeScreen: React.FC = () => {
               onPress={() => handleAIAppSelect('chatgpt')}
             >
               <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
-                💬 ChatGPT
+                ChatGPT
               </Text>
             </TouchableOpacity>
             
@@ -774,6 +796,28 @@ const styles = StyleSheet.create({
   taskIdText: {
     marginTop: 2,
     flex: 1,
+  },
+  selectedAppContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginTop: 12,
+    gap: 4,
+  },
+  selectedAppRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedAppText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  taskTypeText: {
+    fontSize: 13,
+    marginTop: 2,
   },
   copyRow: {
     flexDirection: 'row',

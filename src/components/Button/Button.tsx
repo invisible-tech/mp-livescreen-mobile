@@ -85,9 +85,9 @@ export const Button: React.FC<ButtonProps> = ({
       case 'primary':
         return {
           container: {
-            backgroundColor: isDisabled ? theme.colors.border : theme.colors.primary,
+            backgroundColor: isDisabled ? theme.colors.border : theme.colors.text,
           },
-          textColor: theme.colors.white,
+          textColor: theme.colors.background,
         };
       case 'secondary':
         return {
@@ -101,16 +101,16 @@ export const Button: React.FC<ButtonProps> = ({
           container: {
             backgroundColor: theme.colors.transparent,
             borderWidth: 1,
-            borderColor: isDisabled ? theme.colors.border : theme.colors.primary,
+            borderColor: isDisabled ? theme.colors.border : theme.colors.text,
           },
-          textColor: isDisabled ? theme.colors.textTertiary : theme.colors.primary,
+          textColor: isDisabled ? theme.colors.textTertiary : theme.colors.text,
         };
       case 'ghost':
         return {
           container: {
             backgroundColor: theme.colors.transparent,
           },
-          textColor: isDisabled ? theme.colors.textTertiary : theme.colors.primary,
+          textColor: isDisabled ? theme.colors.textTertiary : theme.colors.text,
         };
       case 'danger':
         return {
@@ -122,9 +122,9 @@ export const Button: React.FC<ButtonProps> = ({
       default:
         return {
           container: {
-            backgroundColor: theme.colors.primary,
+            backgroundColor: theme.colors.text,
           },
-          textColor: theme.colors.white,
+          textColor: theme.colors.background,
         };
     }
   };

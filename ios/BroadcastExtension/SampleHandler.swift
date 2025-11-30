@@ -46,7 +46,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             defaults.set("FINISHED: \(Date())", forKey: "extension_last_init")
             defaults.set(true, forKey: "extension_did_finish")
             defaults.synchronize()
-        }
+    }
     }
     
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {

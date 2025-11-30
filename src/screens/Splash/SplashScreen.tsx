@@ -11,7 +11,7 @@ interface SplashScreenProps {
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete }) => {
   const { theme } = useTheme();
-
+  
   // Animation values
   const logoScale = useRef(new Animated.Value(0)).current;
   const logoRotate = useRef(new Animated.Value(0)).current;
@@ -89,17 +89,17 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
       ]),
       // Text slides up and fades in
       Animated.parallel([
-        Animated.timing(textOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
+      Animated.timing(textOpacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
         Animated.timing(textTranslateY, {
           toValue: 0,
           duration: 400,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
+        useNativeDriver: true,
+      }),
       ]),
       // Wait
       Animated.delay(600),
@@ -145,26 +145,26 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
             },
           ]}
         />
-        <Animated.View
-          style={[
+      <Animated.View
+        style={[
             styles.circle,
             styles.circle2,
-            {
+          {
               opacity: circle2Opacity,
               transform: [{ scale: circle2Scale }],
-            },
-          ]}
-        />
-        <Animated.View
-          style={[
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
             styles.circle,
             styles.circle3,
-            {
+          {
               opacity: circle3Opacity,
               transform: [{ scale: circle3Scale }],
-            },
-          ]}
-        />
+          },
+        ]}
+      />
       </View>
 
       {/* Logo */}
@@ -207,7 +207,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
           <Animated.View
             style={[
               styles.loadingProgress,
-              { backgroundColor: theme.colors.primary },
+              { backgroundColor: theme.colors.text },
             ]}
           />
         </View>

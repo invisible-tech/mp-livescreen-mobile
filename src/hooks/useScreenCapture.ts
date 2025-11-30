@@ -133,27 +133,27 @@ export const useScreenCapture = (): UseScreenCaptureReturn => {
         const { RECORDING_CONFIG } = await import('@/config');
         const { getDeviceId, getPlatform } = await import('@/utils');
 
-        const response = await apiClient.startRecording({
-          deviceId: getDeviceId(),
-          platform: getPlatform(),
-          quality: RECORDING_CONFIG.VIDEO_QUALITY,
-          frameRate: RECORDING_CONFIG.FRAME_RATE,
-        });
+      const response = await apiClient.startRecording({
+        deviceId: getDeviceId(),
+        platform: getPlatform(),
+        quality: RECORDING_CONFIG.VIDEO_QUALITY,
+        frameRate: RECORDING_CONFIG.FRAME_RATE,
+      });
 
-        if (!response.success || !response.data) {
-          throw new Error(response.error || 'Failed to start recording session');
-        }
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to start recording session');
+      }
 
-        const { recordingId } = response.data;
-        await ScreenCapture.startBroadcast();
+      const { recordingId } = response.data;
+      await ScreenCapture.startBroadcast();
 
-        setState({
-          status: RecordingStatus.RECORDING,
-          recordingId,
-          startTime: Date.now(),
-          duration: 0,
-          error: null,
-        });
+      setState({
+        status: RecordingStatus.RECORDING,
+        recordingId,
+        startTime: Date.now(),
+        duration: 0,
+        error: null,
+      });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to start recording';
@@ -172,7 +172,7 @@ export const useScreenCapture = (): UseScreenCaptureReturn => {
 
       // Stop native screen capture
       await ScreenCapture.stopBroadcast();
-      
+
       console.log('[ScreenCapture] Recording stopped');
 
       if (!LOCAL_MODE && state.recordingId) {

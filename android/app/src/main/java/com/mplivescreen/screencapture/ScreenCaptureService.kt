@@ -232,6 +232,8 @@ class ScreenCaptureService : Service() {
                     .addFormDataPart("chunkIndex", currentChunkIndex.toString())
                     .addFormDataPart("timestamp", System.currentTimeMillis().toString())
                     .addFormDataPart("duration", CHUNK_DURATION_MS.toString())
+                    .addFormDataPart("os_type", "android")
+                    .addFormDataPart("task_type", "audio-video")
                     .build()
                 
                 val request = Request.Builder()
