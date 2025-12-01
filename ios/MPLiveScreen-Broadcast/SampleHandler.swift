@@ -201,7 +201,90 @@ class SampleHandler: RPBroadcastSampleHandler {
         log.log("Recording ID: \(recordingId ?? "unknown")")
         log.log("Task: tenant=\(tenantId ?? "nil"), campaign=\(campaignId ?? "nil"), task=\(taskId ?? "nil")")
         
-        prepareNewChunk()
+        // Call cleanup endpoint before starting recording
+        callCleanupEndpoint { [weak self] success in
+            guard let self = self else { return }
+            if success {
+                log.log("✅ Cleanup completed, starting recording")
+            } else {
+                log.log("⚠️ Cleanup failed, proceeding anyway")
+            }
+            self.prepareNewChunk()
+        }
+    }
+    
+    // MARK: - Cleanup Previous Task
+    
+    private func callCleanupEndpoint(completion: @escaping (Bool) -> Void) {
+        let log = ExtensionLogger.shared
+        
+        guard let taskId = taskId, let tenantId = tenantId else {
+            log.log("⚠️ No task_id or tenant_id for cleanup")
+            completion(true)  // Proceed anyway
+            return
+        }
+        
+        let fullURL = "\(apiBaseUrl)/api/delete-mobile-content"
+        guard let url = URL(string: fullURL) else {
+            log.log("❌ Invalid cleanup URL: \(fullURL)")
+            completion(false)
+            return
+        }
+        
+        log.log("🧹 Calling delete-mobile-content: \(fullURL)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(xApiKey, forHTTPHeaderField: "X-API-Key")
+        request.timeoutInterval = 30
+        
+        let body: [String: Any] = [
+            "tenant_id": tenantId,
+            "campaign_id": campaignId ?? "",
+            "task_id": taskId,
+            "step_id": stepId ?? "",
+            "app_type": aiAppType ?? "gemini",
+            "task_type": taskType,
+            "os_type": "ios"
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        } catch {
+            log.log("❌ Failed to serialize cleanup body: \(error)")
+            completion(false)
+            return
+        }
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        var success = false
+        
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            defer { semaphore.signal() }
+            
+            if let error = error {
+                log.log("❌ Cleanup error: \(error.localizedDescription)")
+                return
+            }
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                log.log("📊 Cleanup response: \(httpResponse.statusCode)")
+                
+                if let data = data, let responseBody = String(data: data, encoding: .utf8) {
+                    log.log("📄 Cleanup response body: \(responseBody)")
+                }
+                
+                success = httpResponse.statusCode == 200 || httpResponse.statusCode == 201
+            }
+        }
+        
+        task.resume()
+        
+        // Wait for cleanup to complete (max 30 seconds)
+        _ = semaphore.wait(timeout: .now() + 30.0)
+        
+        completion(success)
     }
     
     override func broadcastPaused() {

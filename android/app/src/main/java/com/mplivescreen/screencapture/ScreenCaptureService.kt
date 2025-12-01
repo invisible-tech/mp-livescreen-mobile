@@ -17,6 +17,12 @@ import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /**
  * ScreenCaptureService - Foreground service for screen recording
@@ -161,9 +167,85 @@ class ScreenCaptureService : Service() {
         Log.d(TAG, "Configuration loaded: appType=$appType")
     }
 
+    private fun callCleanupEndpoint(callback: (Boolean) -> Unit) {
+        val prefs = getSharedPreferences("TaskParams", Context.MODE_PRIVATE)
+        val taskId = prefs.getString("taskId", null)
+        val tenantId = prefs.getString("tenantId", null)
+        val campaignId = prefs.getString("campaignId", null)
+        val stepId = prefs.getString("stepId", null)
+        val apiBaseUrl = prefs.getString("apiBaseUrl", null)
+        val xApiKey = prefs.getString("xApiKey", "") ?: ""
+        val aiAppType = prefs.getString("aiAppType", "gemini") ?: "gemini"
+        val taskType = prefs.getString("taskType", "audio-video") ?: "audio-video"
+        
+        if (taskId == null || tenantId == null || apiBaseUrl == null) {
+            Log.w(TAG, "Missing params for cleanup, proceeding anyway")
+            callback(true)
+            return
+        }
+        
+        Log.d(TAG, "🧹 Calling delete-mobile-content: $apiBaseUrl/api/delete-mobile-content")
+        
+        val client = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+        
+        val jsonBody = JSONObject().apply {
+            put("tenant_id", tenantId)
+            put("campaign_id", campaignId ?: "")
+            put("task_id", taskId)
+            put("step_id", stepId ?: "")
+            put("app_type", aiAppType)
+            put("task_type", taskType)
+            put("os_type", "android")
+        }
+        
+        val requestBody = jsonBody.toString()
+            .toRequestBody("application/json".toMediaType())
+        
+        val request = Request.Builder()
+            .url("$apiBaseUrl/api/delete-mobile-content")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("X-API-Key", xApiKey)
+            .post(requestBody)
+            .build()
+        
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e(TAG, "❌ Cleanup error: ${e.message}")
+                callback(false)
+            }
+            
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    Log.d(TAG, "📊 Cleanup response: ${response.code}")
+                    val responseBody = response.body?.string()
+                    Log.d(TAG, "📄 Cleanup response body: $responseBody")
+                    callback(response.isSuccessful)
+                }
+            }
+        })
+    }
+
     private fun startRecording(resultCode: Int, data: Intent) {
         Log.d(TAG, "Starting recording")
         
+        // Call cleanup endpoint first, then start recording
+        callCleanupEndpoint { success ->
+            if (success) {
+                Log.d(TAG, "Cleanup completed, starting recording")
+            } else {
+                Log.w(TAG, "Cleanup failed, proceeding anyway")
+            }
+            
+            handler.post {
+                actuallyStartRecording(resultCode, data)
+            }
+        }
+    }
+    
+    private fun actuallyStartRecording(resultCode: Int, data: Intent) {
         try {
             // Get MediaProjection
             val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
