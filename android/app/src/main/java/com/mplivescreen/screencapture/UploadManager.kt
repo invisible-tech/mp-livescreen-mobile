@@ -136,7 +136,6 @@ class UploadManager(
                     "step_id" to taskParams.stepId,
                     "recording_id" to taskParams.recordingId,
                     "chunk_index" to chunkInfo.chunkIndex.toString(),
-                    "is_first" to (chunkInfo.chunkIndex == 0).toString(),
                     "is_final" to chunkInfo.isFinal.toString(),
                     "app_type" to taskParams.appType,
                     "os_type" to "android",

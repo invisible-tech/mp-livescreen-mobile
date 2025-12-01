@@ -858,7 +858,6 @@ class SampleHandler: RPBroadcastSampleHandler {
             "step_id": stepId,
             "recording_id": recordingId,
             "chunk_index": String(chunkIndex),
-            "is_first": String(chunkIndex == 0),
             "is_final": String(isFinal),
             "os_type": "ios",
             "task_type": taskType
