@@ -4,11 +4,8 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
-import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -16,59 +13,94 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.DisplayMetrics
+import android.util.Log
+import android.view.Surface
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.util.concurrent.TimeUnit
 
+/**
+ * ScreenCaptureService - Foreground service for screen recording
+ * Equivalent to iOS Broadcast Extension
+ * 
+ * Features:
+ * - Screen capture via MediaProjection
+ * - H.264 video encoding via MediaCodec
+ * - AAC audio encoding for microphone (Gemini)
+ * - Chunked recording with automatic rotation
+ * - Background upload to backend
+ */
 class ScreenCaptureService : Service() {
 
     companion object {
+        private const val TAG = "ScreenCaptureService"
         const val CHANNEL_ID = "ScreenCaptureChannel"
         const val NOTIFICATION_ID = 1001
-        const val CHUNK_DURATION_MS = 5000L // 5 seconds
+        
+        const val ACTION_START = "com.mplivescreen.START_CAPTURE"
+        const val ACTION_STOP = "com.mplivescreen.STOP_CAPTURE"
+        
+        const val EXTRA_RESULT_CODE = "resultCode"
+        const val EXTRA_DATA = "data"
+        
+        // Recording settings
+        const val DEFAULT_WIDTH = 1080
+        const val DEFAULT_HEIGHT = 1920
+        const val DEFAULT_CHUNK_DURATION_MS = 30_000L  // 30 seconds
     }
 
+    // MediaProjection
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
-    private var imageReader: ImageReader? = null
-    private var handler: Handler? = null
     
-    private var recordingId: String? = null
-    private var chunkIndex = 0
-    private var startTime: Long = 0
+    // Recording components
+    private var chunkManager: ChunkManager? = null
+    private var uploadManager: UploadManager? = null
     
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
+    // Recording state
+    private var isRecording = false
+    private var recordingStartTime: Long = 0
     
-    // These should come from SharedPreferences or be passed in
-    private var apiBaseUrl = "https://vdi-dev.invsta.systems"
-    private var apiKey = ""
+    // Configuration
+    private var appType: String = "gemini"  // "gemini" or "chatgpt"
+    
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "Service created")
         createNotificationChannel()
-        handler = Handler(Looper.getMainLooper())
+        uploadManager = UploadManager(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val resultCode = intent?.getIntExtra("resultCode", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
-        val data = intent?.getParcelableExtra<Intent>("data")
+        Log.d(TAG, "onStartCommand: action=${intent?.action}")
         
-        if (resultCode == Activity.RESULT_OK && data != null) {
-            startForegroundServiceNotification()
-            startScreenCapture(resultCode, data)
-        } else {
-            stopSelf()
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopRecording()
+                stopSelf()
+            }
+            else -> {
+                val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED) 
+                    ?: Activity.RESULT_CANCELED
+                val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent?.getParcelableExtra(EXTRA_DATA)
+                }
+                
+                if (resultCode == Activity.RESULT_OK && data != null) {
+                    startForegroundWithNotification()
+                    loadConfiguration()
+                    startRecording(resultCode, data)
+                } else {
+                    Log.e(TAG, "Invalid start parameters")
+                    stopSelf()
+                }
+            }
         }
         
         return START_NOT_STICKY
@@ -81,7 +113,8 @@ class ScreenCaptureService : Service() {
                 "Screen Capture",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Screen capture recording notification"
+                description = "Recording screen for MP LiveCapture"
+                setShowBadge(false)
             }
             
             val notificationManager = getSystemService(NotificationManager::class.java)
@@ -89,200 +122,199 @@ class ScreenCaptureService : Service() {
         }
     }
 
-    private fun startForegroundServiceNotification() {
+    private fun startForegroundWithNotification() {
+        val stopIntent = Intent(this, ScreenCaptureService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this, 0, stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("MP Live Screen")
+            .setContentTitle("MP LiveCapture")
             .setContentText("Recording your screen...")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .addAction(android.R.drawable.ic_media_pause, "Stop", stopPendingIntent)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID, 
-                notification,
+            val foregroundServiceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or 
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            } else {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            )
+            }
+            startForeground(NOTIFICATION_ID, notification, foregroundServiceType)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        
+        Log.d(TAG, "Foreground service started")
     }
 
-    private fun startScreenCapture(resultCode: Int, data: Intent) {
-        val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
-        
-        // Get display metrics
-        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val metrics = DisplayMetrics()
-        windowManager.defaultDisplay.getMetrics(metrics)
-        
-        val width = 1080
-        val height = 1920
-        val density = metrics.densityDpi
-        
-        // Create ImageReader
-        imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-        
-        // Create virtual display
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "ScreenCapture",
-            width,
-            height,
-            density,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader?.surface,
-            null,
-            handler
-        )
-        
-        // Start recording session
-        startRecordingSession()
-        
-        // Start capturing frames
-        startFrameCapture()
+    private fun loadConfiguration() {
+        val prefs = getSharedPreferences("TaskParams", Context.MODE_PRIVATE)
+        appType = prefs.getString("aiAppType", "gemini") ?: "gemini"
+        Log.d(TAG, "Configuration loaded: appType=$appType")
     }
 
-    private fun startRecordingSession() {
-        Thread {
-            try {
-                val json = JSONObject().apply {
-                    put("deviceId", Build.ID)
-                    put("platform", "android")
-                    put("quality", "1080p")
-                    put("frameRate", 60)
-                }
-                
-                val request = Request.Builder()
-                    .url("$apiBaseUrl/api/v1/recordings/start")
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("X-API-Key", apiKey)
-                    .post(json.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-                
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val responseBody = response.body?.string()
-                        val responseJson = JSONObject(responseBody ?: "{}")
-                        recordingId = responseJson.optString("recordingId")
-                        startTime = System.currentTimeMillis()
-                        chunkIndex = 0
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
-    }
-
-    private fun startFrameCapture() {
-        handler?.postDelayed(object : Runnable {
-            override fun run() {
-                captureAndUploadChunk()
-                handler?.postDelayed(this, CHUNK_DURATION_MS)
-            }
-        }, CHUNK_DURATION_MS)
-    }
-
-    private fun captureAndUploadChunk() {
-        val image = imageReader?.acquireLatestImage() ?: return
+    private fun startRecording(resultCode: Int, data: Intent) {
+        Log.d(TAG, "Starting recording")
         
         try {
-            val planes = image.planes
-            val buffer = planes[0].buffer
-            val pixelStride = planes[0].pixelStride
-            val rowStride = planes[0].rowStride
-            val rowPadding = rowStride - pixelStride * image.width
+            // Get MediaProjection
+            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = projectionManager.getMediaProjection(resultCode, data)
             
-            val bitmap = Bitmap.createBitmap(
-                image.width + rowPadding / pixelStride,
-                image.height,
-                Bitmap.Config.ARGB_8888
+            if (mediaProjection == null) {
+                Log.e(TAG, "Failed to get MediaProjection")
+                stopSelf()
+                return
+            }
+            
+            // Register callback for projection stop
+            mediaProjection?.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() {
+                    Log.d(TAG, "MediaProjection stopped")
+                    handler.post { stopRecording() }
+                }
+            }, handler)
+            
+            // Get display metrics
+            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val metrics = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.getMetrics(metrics)
+            
+            val width = DEFAULT_WIDTH
+            val height = DEFAULT_HEIGHT
+            val density = metrics.densityDpi
+            
+            // Create chunk manager
+            // For Gemini: capture mic audio (separate file) + app audio (in video file)
+            // For ChatGPT: no mic needed (user exports manually)
+            val includeMicAudio = appType.lowercase() != "chatgpt"
+            
+            chunkManager = ChunkManager(
+                context = this,
+                chunkDurationMs = DEFAULT_CHUNK_DURATION_MS,
+                onChunkReady = { chunkInfo -> onChunkReady(chunkInfo) }
+            ).apply {
+                // Pass mediaProjection for app audio capture (Gemini/ChatGPT voice)
+                configure(width, height, includeMicAudio, mediaProjection)
+            }
+            
+            // Start recording and get encoder surface
+            val surface = chunkManager?.start()
+            
+            if (surface == null) {
+                Log.e(TAG, "Failed to get encoder surface")
+                stopSelf()
+                return
+            }
+            
+            // Create VirtualDisplay to render to encoder surface
+            virtualDisplay = mediaProjection?.createVirtualDisplay(
+                "ScreenCapture",
+                width,
+                height,
+                density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                surface,
+                null,
+                handler
             )
-            bitmap.copyPixelsFromBuffer(buffer)
             
-            // Convert to JPEG
-            val outputStream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-            val chunkData = outputStream.toByteArray()
+            isRecording = true
+            recordingStartTime = System.currentTimeMillis()
             
-            bitmap.recycle()
+            // Update status
+            updateRecordingStatus(true)
             
-            // Upload chunk
-            uploadChunk(chunkData)
-        } finally {
-            image.close()
+            Log.d(TAG, "Recording started: ${width}x${height}, density=$density, audio=$includeAudio")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting recording", e)
+            stopSelf()
         }
     }
 
-    private fun uploadChunk(data: ByteArray) {
-        val currentRecordingId = recordingId ?: return
-        val currentChunkIndex = chunkIndex++
+    private fun onChunkReady(chunkInfo: ChunkManager.ChunkInfo) {
+        Log.d(TAG, "Chunk ready: index=${chunkInfo.chunkIndex}, duration=${chunkInfo.durationMs}ms, final=${chunkInfo.isFinal}")
         
-        Thread {
-            try {
-                val requestBody = MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart(
-                        "chunk",
-                        "chunk_$currentChunkIndex.jpg",
-                        data.toRequestBody("image/jpeg".toMediaType())
-                    )
-                    .addFormDataPart("chunkIndex", currentChunkIndex.toString())
-                    .addFormDataPart("timestamp", System.currentTimeMillis().toString())
-                    .addFormDataPart("duration", CHUNK_DURATION_MS.toString())
-                    .addFormDataPart("os_type", "android")
-                    .addFormDataPart("task_type", "audio-video")
-                    .build()
-                
-                val request = Request.Builder()
-                    .url("$apiBaseUrl/api/v1/recordings/$currentRecordingId/chunk")
-                    .addHeader("X-API-Key", apiKey)
-                    .post(requestBody)
-                    .build()
-                
-                client.newCall(request).execute().close()
-            } catch (e: Exception) {
-                e.printStackTrace()
+        val taskParams = uploadManager?.loadTaskParams()
+        if (taskParams == null) {
+            Log.e(TAG, "No task params, cannot upload")
+            return
+        }
+        
+        uploadManager?.uploadChunk(
+            chunkInfo = chunkInfo,
+            taskParams = taskParams,
+            onSuccess = {
+                Log.d(TAG, "Chunk ${chunkInfo.chunkIndex} uploaded successfully")
+            },
+            onError = { error ->
+                Log.e(TAG, "Chunk ${chunkInfo.chunkIndex} upload failed: $error")
             }
-        }.start()
+        )
     }
 
-    private fun endRecordingSession() {
-        val currentRecordingId = recordingId ?: return
-        val duration = System.currentTimeMillis() - startTime
+    private fun stopRecording() {
+        Log.d(TAG, "Stopping recording")
         
-        Thread {
-            try {
-                val json = JSONObject().apply {
-                    put("totalChunks", chunkIndex)
-                    put("totalDuration", duration)
-                }
-                
-                val request = Request.Builder()
-                    .url("$apiBaseUrl/api/v1/recordings/$currentRecordingId/end")
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("X-API-Key", apiKey)
-                    .post(json.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-                
-                client.newCall(request).execute().close()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
+        if (!isRecording) {
+            Log.d(TAG, "Not recording, nothing to stop")
+            return
+        }
+        
+        isRecording = false
+        val duration = System.currentTimeMillis() - recordingStartTime
+        Log.d(TAG, "Recording duration: ${duration}ms")
+        
+        // Stop chunk manager (will trigger final chunk)
+        val finalChunk = chunkManager?.stop()
+        if (finalChunk != null) {
+            onChunkReady(finalChunk)
+        }
+        
+        // Release VirtualDisplay
+        virtualDisplay?.release()
+        virtualDisplay = null
+        
+        // Stop MediaProjection
+        mediaProjection?.stop()
+        mediaProjection = null
+        
+        // Update status
+        updateRecordingStatus(false)
+        
+        Log.d(TAG, "Recording stopped")
+    }
+
+    private fun updateRecordingStatus(isRecording: Boolean) {
+        val prefs = getSharedPreferences("RecordingStatus", Context.MODE_PRIVATE)
+        prefs.edit().apply {
+            putBoolean("isRecording", isRecording)
+            putLong("timestamp", System.currentTimeMillis())
+            apply()
+        }
+        
+        // Broadcast state change
+        val intent = Intent("com.mplivescreen.RECORDING_STATE_CHANGED").apply {
+            putExtra("isRecording", isRecording)
+        }
+        sendBroadcast(intent)
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "Service destroyed")
+        stopRecording()
+        uploadManager?.shutdown()
+        chunkManager?.cleanupChunks()
         super.onDestroy()
-        
-        endRecordingSession()
-        
-        handler?.removeCallbacksAndMessages(null)
-        virtualDisplay?.release()
-        imageReader?.close()
-        mediaProjection?.stop()
     }
 }
-

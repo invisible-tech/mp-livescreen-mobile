@@ -7,10 +7,14 @@
     <!-- Screen capture permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     
     <!-- Wake lock for background recording -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- Vibration for feedback -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
       android:name=".MainApplication"
@@ -40,7 +44,7 @@
         android:name=".screencapture.ScreenCaptureService"
         android:enabled="true"
         android:exported="false"
-        android:foregroundServiceType="mediaProjection" />
+        android:foregroundServiceType="mediaProjection|microphone" />
         
     </application>
 </manifest>
