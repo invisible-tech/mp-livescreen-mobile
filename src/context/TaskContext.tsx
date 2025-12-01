@@ -45,6 +45,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
           await ScreenCaptureModule.setTaskParams({
             ...params,
             apiBaseUrl: url,
+            xApiKey: API_CONFIG.API_KEY,  // Pass API key for authentication
           });
           console.log('[TaskContext] Task params saved to App Group (apiBaseUrl:', url, ')');
         } catch (error) {

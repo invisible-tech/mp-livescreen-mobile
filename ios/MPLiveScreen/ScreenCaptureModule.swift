@@ -335,6 +335,12 @@ class ScreenCaptureModule: NSObject {
     defaults.set(taskType, forKey: "taskType")
     NSLog("[ScreenCaptureModule] Task type saved: \(taskType)")
     
+    // Save X-API-Key for authentication
+    if let xApiKey = params["xApiKey"] as? String {
+      defaults.set(xApiKey, forKey: "xApiKey")
+      NSLog("[ScreenCaptureModule] X-API-Key saved")
+    }
+    
     defaults.synchronize()
     
     NSLog("[ScreenCaptureModule] Task params saved to App Group")
@@ -358,6 +364,7 @@ class ScreenCaptureModule: NSObject {
     defaults.removeObject(forKey: "stepId")
     defaults.removeObject(forKey: "taskId")
     defaults.removeObject(forKey: "uploadStatus")
+    defaults.removeObject(forKey: "xApiKey")
     defaults.synchronize()
     
     NSLog("[ScreenCaptureModule] Task params cleared from App Group")

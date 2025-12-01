@@ -36,6 +36,7 @@ interface TaskParams {
   taskType?: 'audio-video' | 'audio';
   apiBaseUrl?: string;
   aiAppType?: 'gemini' | 'chatgpt';
+  xApiKey?: string;
 }
 
 interface ScreenCaptureNativeModule {

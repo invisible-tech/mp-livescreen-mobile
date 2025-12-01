@@ -157,6 +157,7 @@ class ScreenCaptureModule(reactContext: ReactApplicationContext) :
                 putString("taskType", params.getString("taskType") ?: "audio-video")
                 putString("apiBaseUrl", params.getString("apiBaseUrl"))
                 putString("aiAppType", params.getString("aiAppType"))
+                putString("xApiKey", params.getString("xApiKey") ?: "")
                 putString("recordingId", UUID.randomUUID().toString())
                 apply()
             }

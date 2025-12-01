@@ -34,7 +34,8 @@ class UploadManager(
         val recordingId: String,
         val apiBaseUrl: String,
         val appType: String,       // "gemini" or "chatgpt"
-        val taskType: String       // "audio-video" or "audio"
+        val taskType: String,      // "audio-video" or "audio"
+        val xApiKey: String        // API key for authentication
     )
 
     private val client = OkHttpClient.Builder()
@@ -72,7 +73,8 @@ class UploadManager(
             recordingId = prefs.getString("recordingId", null) ?: java.util.UUID.randomUUID().toString(),
             apiBaseUrl = apiBaseUrl,
             appType = prefs.getString("aiAppType", "gemini") ?: "gemini",
-            taskType = prefs.getString("taskType", "audio-video") ?: "audio-video"
+            taskType = prefs.getString("taskType", "audio-video") ?: "audio-video",
+            xApiKey = prefs.getString("xApiKey", "") ?: ""
         )
     }
 
@@ -134,6 +136,7 @@ class UploadManager(
                     "step_id" to taskParams.stepId,
                     "recording_id" to taskParams.recordingId,
                     "chunk_index" to chunkInfo.chunkIndex.toString(),
+                    "is_first" to (chunkInfo.chunkIndex == 0).toString(),
                     "is_final" to chunkInfo.isFinal.toString(),
                     "app_type" to taskParams.appType,
                     "os_type" to "android",
@@ -152,6 +155,7 @@ class UploadManager(
                 
                 val request = Request.Builder()
                     .url("${taskParams.apiBaseUrl}/api/upload-mobile-content")
+                    .addHeader("X-API-Key", taskParams.xApiKey)
                     .post(requestBody)
                     .build()
                 

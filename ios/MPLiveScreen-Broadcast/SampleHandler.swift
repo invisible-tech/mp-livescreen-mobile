@@ -79,6 +79,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var stepId: String?
     private var aiAppType: String?
     private var taskType: String = "audio-video"  // Default to 'audio-video'
+    private var xApiKey: String = ""  // API key for authentication
     
     // MARK: - Recording State
     
@@ -139,6 +140,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         stepId = defaults.string(forKey: "stepId")
         aiAppType = defaults.string(forKey: "aiAppType")
         taskType = defaults.string(forKey: "taskType") ?? "audio-video"  // Default to 'audio-video'
+        xApiKey = defaults.string(forKey: "xApiKey") ?? ""  // API key for authentication
         
         if let savedApiUrl = defaults.string(forKey: "apiBaseUrl"), !savedApiUrl.isEmpty {
             apiBaseUrl = savedApiUrl
@@ -805,6 +807,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue(xApiKey, forHTTPHeaderField: "X-API-Key")
         request.timeoutInterval = 60
         
         var body = Data()
@@ -855,6 +858,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             "step_id": stepId,
             "recording_id": recordingId,
             "chunk_index": String(chunkIndex),
+            "is_first": String(chunkIndex == 0),
             "is_final": String(isFinal),
             "os_type": "ios",
             "task_type": taskType

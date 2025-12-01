@@ -27,6 +27,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useTask, useServerEnv } from '@/context';
 import { useScreenCapture } from '@/hooks';
 import ScreenCapture from '@/native/ScreenCapture';
+import { API_CONFIG } from '@/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -276,6 +277,7 @@ export const HomeScreen: React.FC = () => {
       formData.append('step_id', taskParams.stepId || '');
       formData.append('recording_id', `chatgpt_${Date.now()}`);
       formData.append('chunk_index', '0');
+      formData.append('is_first', 'true');
       formData.append('is_final', 'true');
       formData.append('app_type', 'chatgpt');
       formData.append('os_type', Platform.OS);
@@ -290,6 +292,7 @@ export const HomeScreen: React.FC = () => {
         body: formData,
         headers: {
           'Content-Type': 'multipart/form-data',
+          'X-API-Key': API_CONFIG.API_KEY,
         },
       });
       
