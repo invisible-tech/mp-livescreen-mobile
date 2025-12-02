@@ -313,8 +313,52 @@ export const HomeScreen: React.FC = () => {
     }
   }, [taskParams, resetTaskState, apiBaseUrl]);
 
+  // Submit task to backend
+  const submitTaskToBackend = useCallback(async () => {
+    if (!taskParams || !selectedAIAppType) return false;
+    
+    try {
+      const payload = {
+        tenant_id: taskParams.tenantId,
+        campaign_id: taskParams.campaignId,
+        task_id: taskParams.taskId,
+        step_id: taskParams.stepId,
+        app_type: selectedAIAppType,
+        task_type: taskParams.taskType || 'audio-video',
+        os_type: Platform.OS,
+        task_data: taskParams.taskData || {},
+      };
+      
+      console.log('[Submit Task] URL:', `${apiBaseUrl}/api/submit-task-mobile`);
+      console.log('[Submit Task] Payload:', JSON.stringify(payload));
+      
+      const response = await fetch(`${apiBaseUrl}/api/submit-task-mobile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_CONFIG.API_KEY,
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const responseText = await response.text();
+      console.log('[Submit Task] Response status:', response.status);
+      console.log('[Submit Task] Response body:', responseText);
+      
+      if (!response.ok) {
+        console.error('[Submit Task] Failed:', response.status, responseText);
+        return false;
+      }
+      
+      return true;
+    } catch (error: any) {
+      console.error('[Submit Task] Error:', error);
+      return false;
+    }
+  }, [taskParams, selectedAIAppType, apiBaseUrl]);
+
   // Handle Submit task
-  const handleSubmitTask = useCallback(() => {
+  const handleSubmitTask = useCallback(async () => {
     if (selectedAIAppType === 'chatgpt') {
       // Show video picker for ChatGPT
       launchImageLibrary(
@@ -322,7 +366,7 @@ export const HomeScreen: React.FC = () => {
           mediaType: 'video',
           selectionLimit: 1,
         },
-        (response) => {
+        async (response) => {
           if (response.didCancel) {
             // User cancelled - do nothing
             return;
@@ -334,16 +378,19 @@ export const HomeScreen: React.FC = () => {
           if (response.assets && response.assets.length > 0) {
             const videoUri = response.assets[0].uri;
             if (videoUri) {
-              uploadChatGPTVideo(videoUri);
+              // Upload video first, then submit task
+              await uploadChatGPTVideo(videoUri);
+              await submitTaskToBackend();
             }
           }
         },
       );
     } else {
-      // Gemini - just reset
+      // Gemini - submit task to backend and reset
+      await submitTaskToBackend();
       resetTaskState();
     }
-  }, [selectedAIAppType, uploadChatGPTVideo, resetTaskState]);
+  }, [selectedAIAppType, uploadChatGPTVideo, resetTaskState, submitTaskToBackend]);
 
   // Copy to clipboard
   const handleCopy = useCallback((text: string, label: string) => {
