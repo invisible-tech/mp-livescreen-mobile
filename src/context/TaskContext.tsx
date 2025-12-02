@@ -4,11 +4,27 @@ import { API_CONFIG } from '@/config';
 
 const { ScreenCaptureModule } = NativeModules;
 
+export type AIAppType = 'gemini' | 'chatgpt' | 'search-live';
+
+// Mapping from step names (from Marketplace) to app types (for BE)
+export const STEP_NAME_TO_APP_TYPE: Record<string, AIAppType> = {
+  'Gemini Live': 'gemini',
+  'ChatGPT': 'chatgpt',
+  'Search Live': 'search-live',
+};
+
+// Get app type from step name (returns null if not recognized)
+export const getAppTypeFromStepName = (stepName: string | null): AIAppType | null => {
+  if (!stepName) return null;
+  return STEP_NAME_TO_APP_TYPE[stepName] || null;
+};
+
 export interface TaskParams {
   tenantId: string;
   campaignId: string;
   campaignName: string;
   stepId: string;
+  stepName: string | null;  // Step name from Marketplace (e.g., 'Gemini Live', 'ChatGPT', 'Search Live')
   taskId: string;
   taskType: 'audio-video' | 'audio';
   taskData: Record<string, any> | null;
@@ -135,6 +151,7 @@ export const parseDeepLink = (url: string): TaskParams | null => {
     const campaignId = params.get('campaign_id');
     const campaignName = params.get('campaign_name');
     const stepId = params.get('step_id');
+    const stepName = params.get('step_name');  // Step name from Marketplace
     const taskId = params.get('task_id');
     const taskDataEncoded = params.get('task_data');
 
@@ -152,7 +169,7 @@ export const parseDeepLink = (url: string): TaskParams | null => {
     // Extract task_type from task_data (or use default)
     const taskType = extractTaskTypeFromTaskData(taskData);
 
-    console.log('[TaskContext] Parsed params:', { tenantId, campaignId, campaignName, stepId, taskId, taskType });
+    console.log('[TaskContext] Parsed params:', { tenantId, campaignId, campaignName, stepId, stepName, taskId, taskType });
 
     if (!tenantId || !campaignId || !campaignName || !stepId || !taskId) {
       console.log('[TaskContext] Missing required params in deep link');
@@ -164,6 +181,7 @@ export const parseDeepLink = (url: string): TaskParams | null => {
       campaignId,
       campaignName: decodeURIComponent(campaignName),
       stepId,
+      stepName: stepName ? decodeURIComponent(stepName) : null,
       taskId,
       taskType,
       taskData,

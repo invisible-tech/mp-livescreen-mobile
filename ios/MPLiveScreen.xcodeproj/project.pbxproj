@@ -310,9 +310,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MPLiveScreen/Pods-MPLiveScreen-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MPLiveScreen/Pods-MPLiveScreen-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -371,9 +375,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MPLiveScreen/Pods-MPLiveScreen-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MPLiveScreen/Pods-MPLiveScreen-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -509,7 +517,7 @@
 				CODE_SIGN_ENTITLEMENTS = MPLiveScreen/MPLiveScreen.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = YDS8RPBC4T;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = MPLiveScreen/Info.plist;
@@ -545,7 +553,7 @@
 				CODE_SIGN_ENTITLEMENTS = MPLiveScreen/MPLiveScreen.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = YDS8RPBC4T;
 				INFOPLIST_FILE = MPLiveScreen/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "MP LiveCapture";

@@ -5,7 +5,6 @@ import {
   Alert,
   Animated,
   Dimensions,
-  Modal,
   TouchableOpacity,
   Clipboard,
   Linking,
@@ -24,15 +23,12 @@ import {
   HelpModal,
 } from '@/components';
 import { useTheme } from '@/context/ThemeContext';
-import { useTask, useServerEnv } from '@/context';
+import { useTask, useServerEnv, getAppTypeFromStepName, type AIAppType } from '@/context';
 import { useScreenCapture } from '@/hooks';
 import ScreenCapture from '@/native/ScreenCapture';
 import { API_CONFIG } from '@/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// AI App types
-type AIAppType = 'gemini' | 'chatgpt' | 'search-live';
 
 export const HomeScreen: React.FC = () => {
   const { theme } = useTheme();
@@ -41,9 +37,11 @@ export const HomeScreen: React.FC = () => {
   const { apiBaseUrl, marketplaceUrl } = useServerEnv();
   const navigation = useNavigation();
   
-  // AI App selection state
-  const [showAIAppModal, setShowAIAppModal] = useState(false);
+  // AI App selection state (now derived from step name)
   const [aiAppSelected, setAiAppSelected] = useState(false);
+  
+  // Derive app type from step name (null if not recognized)
+  const derivedAppType = taskParams?.stepName ? getAppTypeFromStepName(taskParams.stepName) : null;
   
   // Help modal state
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -150,14 +148,19 @@ export const HomeScreen: React.FC = () => {
     );
   }, [handleOpenMarketplace]);
 
-  // Handle Start task button when has task
+  // Handle Start task button - now uses step name to determine app type
   const handleStartTask = useCallback(() => {
-    setShowAIAppModal(true);
-  }, []);
-
-  // Handle AI app selection
-  const handleAIAppSelect = useCallback((appType: AIAppType) => {
-    setShowAIAppModal(false);
+    const appType = derivedAppType;
+    
+    if (!appType) {
+      Alert.alert(
+        'Unsupported Step Type',
+        'Please select a task from one of the supported step types:\n\n• Gemini Live\n• ChatGPT\n• Search Live',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     setSelectedAIAppType(appType);
     setCompletedTaskName(taskParams?.campaignName || 'Task');
     
@@ -168,27 +171,10 @@ export const HomeScreen: React.FC = () => {
       apiBaseUrl: apiBaseUrl,
     }).catch(() => {});
     
-    if (appType === 'chatgpt') {
-      // Show instructions for ChatGPT
-      Alert.alert(
-        '📱 ChatGPT Export Required',
-        'After your ChatGPT conversation:\n\n1. In ChatGPT app, tap the share icon\n2. Export the conversation as video to Photos\n3. Return here and tap "Submit task"\n\nTap OK to start recording.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setAiAppSelected(true);
-              setRecordingStartTime(Date.now());
-            },
-          },
-        ],
-      );
-    } else {
-      // Gemini / Search Live - proceed directly
-      setAiAppSelected(true);
-      setRecordingStartTime(Date.now());
-    }
-  }, [taskParams, apiBaseUrl]);
+    // All app types proceed directly
+    setAiAppSelected(true);
+    setRecordingStartTime(Date.now());
+  }, [derivedAppType, taskParams, apiBaseUrl]);
 
   // Poll broadcast state when AI app is selected
   useEffect(() => {
@@ -314,8 +300,11 @@ export const HomeScreen: React.FC = () => {
   }, [taskParams, resetTaskState, apiBaseUrl]);
 
   // Submit task to backend
-  const submitTaskToBackend = useCallback(async () => {
-    if (!taskParams || !selectedAIAppType) return false;
+  const submitTaskToBackend = useCallback(async (): Promise<boolean> => {
+    if (!taskParams || !selectedAIAppType) {
+      Alert.alert('Error', 'Missing task parameters. Please try again.');
+      return false;
+    }
     
     try {
       const payload = {
@@ -347,12 +336,31 @@ export const HomeScreen: React.FC = () => {
       
       if (!response.ok) {
         console.error('[Submit Task] Failed:', response.status, responseText);
+        
+        // Try to parse error message from response
+        let errorMessage = `Server error (${response.status})`;
+        try {
+          const errorJson = JSON.parse(responseText);
+          if (errorJson.error) {
+            errorMessage = errorJson.error;
+          } else if (errorJson.message) {
+            errorMessage = errorJson.message;
+          }
+        } catch {
+          // Use responseText if not JSON
+          if (responseText && responseText.length < 200) {
+            errorMessage = responseText;
+          }
+        }
+        
+        Alert.alert('Submit Failed', errorMessage);
         return false;
       }
       
       return true;
     } catch (error: any) {
       console.error('[Submit Task] Error:', error);
+      Alert.alert('Submit Failed', error.message || 'Network error. Please check your connection.');
       return false;
     }
   }, [taskParams, selectedAIAppType, apiBaseUrl]);
@@ -380,15 +388,22 @@ export const HomeScreen: React.FC = () => {
             if (videoUri) {
               // Upload video first, then submit task
               await uploadChatGPTVideo(videoUri);
-              await submitTaskToBackend();
+              const success = await submitTaskToBackend();
+              if (success) {
+                resetTaskState();
+              }
+              // If failed, alert is already shown by submitTaskToBackend
             }
           }
         },
       );
     } else {
       // Gemini / Search Live - submit task to backend and reset
-      await submitTaskToBackend();
-      resetTaskState();
+      const success = await submitTaskToBackend();
+      if (success) {
+        resetTaskState();
+      }
+      // If failed, alert is already shown by submitTaskToBackend
     }
   }, [selectedAIAppType, uploadChatGPTVideo, resetTaskState, submitTaskToBackend]);
 
@@ -453,16 +468,16 @@ export const HomeScreen: React.FC = () => {
         )}
 
         {/* Selected App Indicator */}
-        {aiAppSelected && selectedAIAppType && hasTask && (
+        {aiAppSelected && taskParams?.stepName && hasTask && (
           <View style={[styles.selectedAppContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
             <View style={styles.selectedAppRow}>
               <Icon 
-                name={selectedAIAppType === 'gemini' ? 'sparkles' : selectedAIAppType === 'chatgpt' ? 'chatbubble-ellipses' : 'search'} 
+                name={derivedAppType === 'gemini' ? 'sparkles' : derivedAppType === 'chatgpt' ? 'chatbubble-ellipses' : 'search'} 
                 size={18} 
                 color={theme.colors.text} 
               />
               <Text style={[styles.selectedAppText, { color: theme.colors.text }]}>
-                <Text style={styles.boldText}>{selectedAIAppType === 'gemini' ? 'Gemini' : selectedAIAppType === 'chatgpt' ? 'ChatGPT' : 'Search Live'}</Text> selected
+                <Text style={styles.boldText}>{taskParams.stepName}</Text> selected
               </Text>
             </View>
             <Text style={[styles.taskTypeText, { color: theme.colors.textSecondary }]}>
@@ -599,7 +614,9 @@ export const HomeScreen: React.FC = () => {
             onPress={handleStartTask}
             activeOpacity={0.8}
           >
-            <Text style={[styles.startTaskButtonText, { color: theme.colors.background }]}>Start task</Text>
+            <Text style={[styles.startTaskButtonText, { color: theme.colors.background }]}>
+              {derivedAppType ? `Start Task - ${taskParams?.stepName}` : 'Start Task'}
+            </Text>
           </TouchableOpacity>
         ) : !hasTask && !isRecording ? (
           /* No task - show disabled-looking button */
@@ -619,61 +636,6 @@ export const HomeScreen: React.FC = () => {
           />
         )}
       </View>
-
-      {/* AI App Selection Modal */}
-      <Modal
-        visible={showAIAppModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAIAppModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-              Select app
-            </Text>
-            <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
-              Which app will you be using?
-            </Text>
-            
-            <TouchableOpacity
-              style={[styles.appOption, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
-              onPress={() => handleAIAppSelect('gemini')}
-            >
-              <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
-                Gemini
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.appOption, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
-              onPress={() => handleAIAppSelect('chatgpt')}
-            >
-              <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
-                ChatGPT
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.appOption, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
-              onPress={() => handleAIAppSelect('search-live')}
-            >
-              <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
-                Search Live
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setShowAIAppModal(false)}
-            >
-              <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* Help Modal */}
       <HelpModal visible={showHelpModal} onClose={() => setShowHelpModal(false)} />
@@ -884,51 +846,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: SCREEN_WIDTH - 48,
-    borderRadius: 16,
-    padding: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  appOption: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
   marketplaceLink: {
     color: '#007AFF',
     textDecorationLine: 'underline',
-  },
-  appOptionText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  cancelButton: {
-    marginTop: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
   },
 });
 
