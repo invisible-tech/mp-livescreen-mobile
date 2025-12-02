@@ -32,7 +32,7 @@ import { API_CONFIG } from '@/config';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // AI App types
-type AIAppType = 'gemini' | 'chatgpt';
+type AIAppType = 'gemini' | 'chatgpt' | 'search-live';
 
 export const HomeScreen: React.FC = () => {
   const { theme } = useTheme();
@@ -184,7 +184,7 @@ export const HomeScreen: React.FC = () => {
         ],
       );
     } else {
-      // Gemini - proceed directly
+      // Gemini / Search Live - proceed directly
       setAiAppSelected(true);
       setRecordingStartTime(Date.now());
     }
@@ -386,7 +386,7 @@ export const HomeScreen: React.FC = () => {
         },
       );
     } else {
-      // Gemini - submit task to backend and reset
+      // Gemini / Search Live - submit task to backend and reset
       await submitTaskToBackend();
       resetTaskState();
     }
@@ -457,12 +457,12 @@ export const HomeScreen: React.FC = () => {
           <View style={[styles.selectedAppContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
             <View style={styles.selectedAppRow}>
               <Icon 
-                name={selectedAIAppType === 'gemini' ? 'sparkles' : 'chatbubble-ellipses'} 
+                name={selectedAIAppType === 'gemini' ? 'sparkles' : selectedAIAppType === 'chatgpt' ? 'chatbubble-ellipses' : 'search'} 
                 size={18} 
                 color={theme.colors.text} 
               />
               <Text style={[styles.selectedAppText, { color: theme.colors.text }]}>
-                {selectedAIAppType === 'gemini' ? 'Gemini' : 'ChatGPT'} selected
+                {selectedAIAppType === 'gemini' ? 'Gemini' : selectedAIAppType === 'chatgpt' ? 'ChatGPT' : 'Search Live'} selected
               </Text>
             </View>
             <Text style={[styles.taskTypeText, { color: theme.colors.textSecondary }]}>
@@ -651,6 +651,15 @@ export const HomeScreen: React.FC = () => {
             >
               <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
                 ChatGPT
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.appOption, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
+              onPress={() => handleAIAppSelect('search-live')}
+            >
+              <Text style={[styles.appOptionText, { color: theme.colors.text }]}>
+                Search Live
               </Text>
             </TouchableOpacity>
             

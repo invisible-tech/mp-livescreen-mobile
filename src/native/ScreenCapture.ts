@@ -35,7 +35,7 @@ interface TaskParams {
   taskId?: string;
   taskType?: 'audio-video' | 'audio';
   apiBaseUrl?: string;
-  aiAppType?: 'gemini' | 'chatgpt';
+  aiAppType?: 'gemini' | 'chatgpt' | 'search-live';
   xApiKey?: string;
 }
 

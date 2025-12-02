@@ -152,17 +152,13 @@ export const parseDeepLink = (url: string): TaskParams | null => {
 
     console.log('[TaskContext] Parsed params:', { tenantId, campaignId, campaignName, stepId, taskId, taskType });
 
-    if (!tenantId || !campaignId || !campaignName || !stepId || !taskId) {
-      console.log('[TaskContext] Missing required params in deep link');
-      return null;
-    }
-
+    // TEMP: All fallbacks for testing Search Live - REMOVE AFTER TESTING
     const result = {
-      tenantId,
-      campaignId,
-      campaignName: decodeURIComponent(campaignName),
-      stepId,
-      taskId,
+      tenantId: tenantId || 'invi',
+      campaignId: campaignId || 'camp_temp_test',
+      campaignName: campaignName ? decodeURIComponent(campaignName) : 'Test Campaign',
+      stepId: stepId || 'step_temp_test',
+      taskId: taskId || 'task_inv_sajj4324jmbm',
       taskType,
       taskData,
     };
