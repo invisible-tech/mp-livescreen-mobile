@@ -453,7 +453,7 @@ export const HomeScreen: React.FC = () => {
         )}
 
         {/* Selected App Indicator */}
-        {aiAppSelected && selectedAIAppType && hasTask && !taskCompleted && (
+        {aiAppSelected && selectedAIAppType && hasTask && (
           <View style={[styles.selectedAppContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
             <View style={styles.selectedAppRow}>
               <Icon 
@@ -462,11 +462,11 @@ export const HomeScreen: React.FC = () => {
                 color={theme.colors.text} 
               />
               <Text style={[styles.selectedAppText, { color: theme.colors.text }]}>
-                {selectedAIAppType === 'gemini' ? 'Gemini' : selectedAIAppType === 'chatgpt' ? 'ChatGPT' : 'Search Live'} selected
+                <Text style={styles.boldText}>{selectedAIAppType === 'gemini' ? 'Gemini' : selectedAIAppType === 'chatgpt' ? 'ChatGPT' : 'Search Live'}</Text> selected
               </Text>
             </View>
             <Text style={[styles.taskTypeText, { color: theme.colors.textSecondary }]}>
-              Task type: {taskParams?.taskType || 'audio-video'}
+              Task type: <Text style={styles.boldText}>{taskParams?.taskType === 'audio' ? 'Audio' : 'Video'}</Text>
             </Text>
           </View>
         )}
@@ -871,11 +871,13 @@ const styles = StyleSheet.create({
   },
   selectedAppText: {
     fontSize: 15,
-    fontWeight: '600',
   },
   taskTypeText: {
     fontSize: 13,
     marginTop: 2,
+  },
+  boldText: {
+    fontWeight: '700',
   },
   copyRow: {
     flexDirection: 'row',

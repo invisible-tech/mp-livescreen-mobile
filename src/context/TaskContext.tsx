@@ -95,21 +95,23 @@ export const useTask = (): TaskContextValue => {
 };
 
 // Helper to extract task_type from task_data
+// Structure: taskData = { "step_xxx": { "type": "audio-video" | "audio", ... } }
 const extractTaskTypeFromTaskData = (taskData: Record<string, any> | null): 'audio-video' | 'audio' => {
-  if (!taskData?.currentData) {
+  if (!taskData) {
     return 'audio-video';
   }
   
-  // Look for 'type' field in any step inside currentData
-  // e.g., taskData.currentData.step_xxx.type
-  const currentData = taskData.currentData;
-  for (const stepKey of Object.keys(currentData)) {
-    const stepData = currentData[stepKey];
+  // Look for 'type' field in any step inside taskData
+  // e.g., taskData.step_xxx.type
+  for (const stepKey of Object.keys(taskData)) {
+    const stepData = taskData[stepKey];
     if (stepData?.type === 'audio' || stepData?.type === 'audio-video') {
+      console.log('[TaskContext] Found task type:', stepData.type, 'in step:', stepKey);
       return stepData.type;
     }
   }
   
+  console.log('[TaskContext] No task type found in task_data, defaulting to audio-video');
   return 'audio-video';
 };
 

@@ -132,23 +132,6 @@ export const SettingsScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Backend Server Section */}
-        <SettingSection title="Backend Server">
-          {(Object.keys(SERVER_ENVIRONMENTS) as ServerEnvironment[]).map((env) => (
-            <SettingItem
-              key={env}
-              icon="server-outline"
-              title={SERVER_ENVIRONMENTS[env].label}
-              onPress={() => handleServerEnvSelect(env)}
-              rightElement={
-                serverEnv === env ? (
-                  <Icon name="checkmark" size={22} color={theme.colors.text} />
-                ) : null
-              }
-            />
-          ))}
-        </SettingSection>
-
         {/* Appearance Section */}
         <SettingSection title="Appearance">
           <SettingItem
@@ -178,6 +161,23 @@ export const SettingsScreen: React.FC = () => {
               ) : null
             }
           />
+        </SettingSection>
+
+        {/* Backend Server Section */}
+        <SettingSection title="Backend Server">
+          {(Object.keys(SERVER_ENVIRONMENTS) as ServerEnvironment[]).map((env) => (
+            <SettingItem
+              key={env}
+              icon="server-outline"
+              title={SERVER_ENVIRONMENTS[env].label}
+              onPress={() => handleServerEnvSelect(env)}
+              rightElement={
+                serverEnv === env ? (
+                  <Icon name="checkmark" size={22} color={theme.colors.text} />
+                ) : null
+              }
+            />
+          ))}
         </SettingSection>
       </ScrollView>
 

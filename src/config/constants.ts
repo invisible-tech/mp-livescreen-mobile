@@ -1,7 +1,7 @@
 import Config from 'react-native-config';
 
 // Server Environment Types
-export type ServerEnvironment = 'production' | 'staging' | 'dev' | 'ali';
+export type ServerEnvironment = 'production' | 'staging' | 'dev' | 'crdev' | 'ali';
 
 // Server Environment Configuration
 export const SERVER_ENVIRONMENTS: Record<ServerEnvironment, { apiBaseUrl: string; marketplaceUrl: string; label: string }> = {
@@ -20,6 +20,11 @@ export const SERVER_ENVIRONMENTS: Record<ServerEnvironment, { apiBaseUrl: string
     marketplaceUrl: 'https://marketplace.qa.invsta.systems',
     label: 'Dev',
   },
+  crdev: {
+    apiBaseUrl: 'https://google-live-api-92706583345.us-central1.run.app',
+    marketplaceUrl: 'https://marketplace.qa.invsta.systems',
+    label: 'CR Dev',
+  },
   ali: {
     apiBaseUrl: 'https://vdi-dev-ali.invsta.systems',
     marketplaceUrl: 'https://marketplace.qa.invsta.systems',
@@ -28,7 +33,7 @@ export const SERVER_ENVIRONMENTS: Record<ServerEnvironment, { apiBaseUrl: string
 };
 
 // Default server environment
-export const DEFAULT_SERVER_ENV: ServerEnvironment = 'ali';
+export const DEFAULT_SERVER_ENV: ServerEnvironment = 'dev';
 
 // API Configuration
 export const API_CONFIG = {
