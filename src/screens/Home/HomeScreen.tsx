@@ -68,11 +68,13 @@ export const HomeScreen: React.FC = () => {
   // ChatGPT specific state
   const [selectedAIAppType, setSelectedAIAppType] = useState<AIAppType | null>(null);
   const [isUploadingChatGPT, setIsUploadingChatGPT] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Task completion state
   const [taskCompleted, setTaskCompleted] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [chunksUploaded, setChunksUploaded] = useState(0);
+  const [isFinalUploadComplete, setIsFinalUploadComplete] = useState(false);
   const [completedTaskName, setCompletedTaskName] = useState<string | null>(null);
   const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
   const [broadcastStarted, setBroadcastStarted] = useState(false);
@@ -200,19 +202,6 @@ export const HomeScreen: React.FC = () => {
           
           setAiAppSelected(false);
           setTaskCompleted(true);
-          
-          // Poll for upload status in background (max 10 seconds)
-          const pollUploadStatus = async () => {
-            for (let i = 0; i < 20; i++) {
-              await new Promise<void>(resolve => setTimeout(resolve, 500));
-              const status = await ScreenCapture.getUploadStatus();
-              if (status?.status === 'success' && status.chunksUploaded > 0) {
-                setChunksUploaded(status.chunksUploaded);
-                return;
-              }
-            }
-          };
-          pollUploadStatus();
         }
       } catch {
         // Ignore errors
@@ -226,17 +215,80 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [aiAppSelected, broadcastStarted, recordingStartTime]);
 
+  // Poll for final upload status when task is completed (separate effect)
+  useEffect(() => {
+    if (!taskCompleted || isFinalUploadComplete) return;
+    if (selectedAIAppType === 'chatgpt') {
+      // ChatGPT doesn't need to wait for upload
+      setIsFinalUploadComplete(true);
+      return;
+    }
+    
+    let cancelled = false;
+    
+    const pollUploadStatus = async () => {
+      let lastTimestamp: number | null = null;
+      let staleCount = 0;
+      
+      // Poll for max 10 seconds (20 iterations * 500ms)
+      for (let i = 0; i < 20; i++) {
+        if (cancelled) return;
+        try {
+          const status = await ScreenCapture.getUploadStatus();
+          
+          if (status?.chunksUploaded > 0) {
+            setChunksUploaded(status.chunksUploaded);
+          }
+          
+          // Check for isFinalUploaded or success status
+          if (status?.isFinalUploaded === true || status?.isFinalUploaded === 1 || 
+              status?.status === 'success') {
+            setIsFinalUploadComplete(true);
+            return;
+          }
+          
+          // If timestamp hasn't changed for 3 checks (1.5 sec), assume upload is done/stuck
+          if (status?.timestamp === lastTimestamp) {
+            staleCount++;
+            if (staleCount >= 3) {
+              setIsFinalUploadComplete(true);
+              return;
+            }
+          } else {
+            staleCount = 0;
+            lastTimestamp = status?.timestamp;
+          }
+        } catch {
+          // Ignore errors
+        }
+        await new Promise<void>(resolve => setTimeout(resolve, 500));
+      }
+      // Timeout - enable submit anyway
+      if (!cancelled) {
+        setIsFinalUploadComplete(true);
+      }
+    };
+    
+    pollUploadStatus();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [taskCompleted, isFinalUploadComplete, selectedAIAppType]);
+
   // Clear task and reset UI
   const resetTaskState = useCallback(() => {
     setTaskCompleted(false);
     setAiAppSelected(false);
     setRecordingDuration(0);
     setChunksUploaded(0);
+    setIsFinalUploadComplete(false);
     setCompletedTaskName(null);
     setRecordingStartTime(null);
     setBroadcastStarted(false);
     setSelectedAIAppType(null);
     setIsUploadingChatGPT(false);
+    setIsSubmitting(false);
     clearTaskParams();
   }, [clearTaskParams]);
 
@@ -386,24 +438,32 @@ export const HomeScreen: React.FC = () => {
           if (response.assets && response.assets.length > 0) {
             const videoUri = response.assets[0].uri;
             if (videoUri) {
-              // Upload video first, then submit task
-              await uploadChatGPTVideo(videoUri);
-              const success = await submitTaskToBackend();
-              if (success) {
-                resetTaskState();
+              setIsSubmitting(true);
+              try {
+                // Upload video first, then submit task
+                await uploadChatGPTVideo(videoUri);
+                const success = await submitTaskToBackend();
+                if (success) {
+                  resetTaskState();
+                }
+              } finally {
+                setIsSubmitting(false);
               }
-              // If failed, alert is already shown by submitTaskToBackend
             }
           }
         },
       );
     } else {
-      // Gemini / Search Live - submit task to backend and reset
-      const success = await submitTaskToBackend();
-      if (success) {
-        resetTaskState();
+      // Gemini / Search Live - submit task to backend
+      setIsSubmitting(true);
+      try {
+        const success = await submitTaskToBackend();
+        if (success) {
+          resetTaskState();
+        }
+      } finally {
+        setIsSubmitting(false);
       }
-      // If failed, alert is already shown by submitTaskToBackend
     }
   }, [selectedAIAppType, uploadChatGPTVideo, resetTaskState, submitTaskToBackend]);
 
@@ -467,25 +527,6 @@ export const HomeScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Selected App Indicator */}
-        {aiAppSelected && taskParams?.stepName && hasTask && (
-          <View style={[styles.selectedAppContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-            <View style={styles.selectedAppRow}>
-              <Icon 
-                name={derivedAppType === 'gemini' ? 'sparkles' : derivedAppType === 'chatgpt' ? 'chatbubble-ellipses' : 'search'} 
-                size={18} 
-                color={theme.colors.text} 
-              />
-              <Text style={[styles.selectedAppText, { color: theme.colors.text }]}>
-                <Text style={styles.boldText}>{taskParams.stepName}</Text> selected
-              </Text>
-            </View>
-            <Text style={[styles.taskTypeText, { color: theme.colors.textSecondary }]}>
-              Task type: <Text style={styles.boldText}>{taskParams?.taskType === 'audio' ? 'Audio' : 'Video'}</Text>
-            </Text>
-          </View>
-        )}
-
         {/* Task Completed Card - with duration and chunks */}
         {taskCompleted && (
           <View style={[styles.taskBox, { borderColor: theme.colors.border }]}>
@@ -527,6 +568,25 @@ export const HomeScreen: React.FC = () => {
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>{chunksUploaded}</Text>
               </View>
             </View>
+          </View>
+        )}
+
+        {/* Selected App Indicator - shows until user submits task */}
+        {hasTask && taskParams?.stepName && derivedAppType && (
+          <View style={[styles.selectedAppContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <View style={styles.selectedAppRow}>
+              <Icon 
+                name={derivedAppType === 'gemini' ? 'sparkles' : derivedAppType === 'chatgpt' ? 'chatbubble-ellipses' : 'search'} 
+                size={18} 
+                color={theme.colors.text} 
+              />
+              <Text style={[styles.selectedAppText, { color: theme.colors.text }]}>
+                <Text style={styles.boldText}>{taskParams.stepName}</Text>
+              </Text>
+            </View>
+            <Text style={[styles.taskTypeText, { color: theme.colors.textSecondary }]}>
+              Task type: <Text style={styles.boldText}>{taskParams?.taskType === 'audio' ? 'Audio' : 'Video'}</Text>
+            </Text>
           </View>
         )}
 
@@ -595,6 +655,20 @@ export const HomeScreen: React.FC = () => {
               <Text style={[styles.uploadingText, { color: theme.colors.text }]}>
                 Uploading ChatGPT video...
                 </Text>
+            </View>
+          ) : isSubmitting ? (
+            <View style={[styles.uploadingContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <ActivityIndicator size="small" color={theme.colors.text} />
+              <Text style={[styles.uploadingText, { color: theme.colors.textSecondary }]}>
+                Submitting task...
+              </Text>
+            </View>
+          ) : !isFinalUploadComplete && selectedAIAppType !== 'chatgpt' ? (
+            <View style={[styles.uploadingContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <ActivityIndicator size="small" color={theme.colors.text} />
+              <Text style={[styles.uploadingText, { color: theme.colors.textSecondary }]}>
+                Waiting for upload to complete...
+              </Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -756,10 +830,13 @@ const styles = StyleSheet.create({
   },
   uploadingContainer: {
     width: '100%',
-    paddingVertical: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: 10,
+    borderRadius: 12,
   },
   uploadingText: {
     fontSize: 16,

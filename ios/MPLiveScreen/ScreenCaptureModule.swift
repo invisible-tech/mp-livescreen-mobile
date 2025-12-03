@@ -397,6 +397,9 @@ class ScreenCaptureModule: NSObject {
       return
     }
     
+    // Force sync to get latest from extension
+    defaults.synchronize()
+    
     if let status = defaults.dictionary(forKey: "uploadStatus") {
       resolve(status)
     } else {

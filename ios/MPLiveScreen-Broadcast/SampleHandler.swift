@@ -152,7 +152,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
     }
     
-    private func updateUploadStatus(chunkIndex: Int, status: String, error: String? = nil) {
+    private func updateUploadStatus(chunkIndex: Int, status: String, error: String? = nil, isFinal: Bool = false) {
         guard let defaults = UserDefaults(suiteName: appGroup) else { return }
         
         let statusDict: [String: Any] = [
@@ -161,7 +161,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             "error": error ?? "",
             "timestamp": Date().timeIntervalSince1970,
             "chunksUploaded": status == "success" ? chunkIndex + 1 : chunkIndex,
-            "recordingId": recordingId ?? ""
+            "recordingId": recordingId ?? "",
+            "isFinalUploaded": isFinal && status == "success"
         ]
         
         defaults.set(statusDict, forKey: "uploadStatus")
@@ -999,11 +1000,11 @@ class SampleHandler: RPBroadcastSampleHandler {
                 
                 if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
                     log.log("✅ SUCCESS! Chunk \(chunkIndex) uploaded successfully")
-                    self?.updateUploadStatus(chunkIndex: chunkIndex, status: "success")
+                    self?.updateUploadStatus(chunkIndex: chunkIndex, status: "success", isFinal: isFinal)
                     log.log("========== UPLOAD SUCCESS ==========")
                 } else {
                     log.log("❌ HTTP ERROR: Status \(httpResponse.statusCode)")
-                    self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: "HTTP \(httpResponse.statusCode)")
+                    self?.updateUploadStatus(chunkIndex: chunkIndex, status: "failed", error: "HTTP \(httpResponse.statusCode)", isFinal: isFinal)
                     log.log("========== UPLOAD FAILED ==========")
                 }
             }
