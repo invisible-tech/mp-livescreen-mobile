@@ -26,7 +26,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useTask, useServerEnv, getAppTypeFromStepName, type AIAppType } from '@/context';
 import { useScreenCapture } from '@/hooks';
 import ScreenCapture from '@/native/ScreenCapture';
-import { API_CONFIG } from '@/config';
+import { API_CONFIG, API_ENDPOINTS, UPLOAD_STATUS_CONFIG } from '@/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -77,6 +77,7 @@ export const HomeScreen: React.FC = () => {
   const [completedTaskName, setCompletedTaskName] = useState<string | null>(null);
   const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
   const [broadcastStarted, setBroadcastStarted] = useState(false);
+  const [isUploadComplete, setIsUploadComplete] = useState(false);
 
 
   // Pulse animation for recording state
@@ -214,6 +215,73 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [aiAppSelected, broadcastStarted, recordingStartTime]);
 
+  // Poll backend for merged file status when task is completed
+  useEffect(() => {
+    if (!taskCompleted || isUploadComplete || !taskParams?.taskId) return;
+    
+    let cancelled = false;
+    const startTime = Date.now();
+    
+    const pollMergedFileStatus = async () => {
+      try {
+        const url = `${apiBaseUrl}${API_ENDPOINTS.MERGED_FILE_STATUS(taskParams.taskId)}`;
+        const apiKey = API_CONFIG.API_KEY;
+        console.log('[HomeScreen] Polling merged file status:', url);
+        console.log('[HomeScreen] API_KEY present:', !!apiKey, 'length:', apiKey?.length || 0);
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey,
+          },
+        });
+        
+        if (response.status === 200) {
+          const data = await response.json();
+          console.log('[HomeScreen] Merged file ready:', data);
+          if (!cancelled) {
+            setIsUploadComplete(true);
+          }
+          return true; // Stop polling
+        } else if (response.status === 404) {
+          console.log('[HomeScreen] Merged file not ready yet (404)');
+          return false; // Continue polling
+        } else {
+          console.log('[HomeScreen] Unexpected response:', response.status);
+          return false; // Continue polling
+        }
+      } catch (error) {
+        console.log('[HomeScreen] Poll error:', error);
+        return false; // Continue polling on error
+      }
+    };
+    
+    const poll = async () => {
+      const isReady = await pollMergedFileStatus();
+      
+      // Check if we should continue polling
+      if (!cancelled && !isReady) {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < UPLOAD_STATUS_CONFIG.MAX_POLLING_DURATION_MS) {
+          // Schedule next poll
+          setTimeout(poll, UPLOAD_STATUS_CONFIG.POLLING_INTERVAL_MS);
+        } else {
+          // Timeout - enable submit anyway to avoid stuck state
+          console.log('[HomeScreen] Polling timeout, enabling submit');
+          setIsUploadComplete(true);
+        }
+      }
+    };
+    
+    // Start polling
+    poll();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [taskCompleted, isUploadComplete, taskParams?.taskId, apiBaseUrl]);
+
   // Clear task and reset UI
   const resetTaskState = useCallback(() => {
     setTaskCompleted(false);
@@ -226,6 +294,7 @@ export const HomeScreen: React.FC = () => {
     setSelectedAIAppType(null);
     setIsUploadingChatGPT(false);
     setIsSubmitting(false);
+    setIsUploadComplete(false);
     clearTaskParams();
   }, [clearTaskParams]);
 
@@ -584,7 +653,7 @@ export const HomeScreen: React.FC = () => {
 
       {/* Bottom Button Section */}
       <View style={[styles.buttonContainer, { backgroundColor: theme.colors.background }]}>
-        {/* Task Completed - Show Submit button */}
+        {/* Task Completed - Show Submit button or Waiting state */}
         {taskCompleted && !isRecording ? (
           isUploadingChatGPT ? (
             <View style={styles.uploadingContainer}>
@@ -598,6 +667,13 @@ export const HomeScreen: React.FC = () => {
               <ActivityIndicator size="small" color={theme.colors.text} />
               <Text style={[styles.uploadingText, { color: theme.colors.textSecondary }]}>
                 Submitting task...
+              </Text>
+            </View>
+          ) : !isUploadComplete ? (
+            <View style={[styles.waitingUploadContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <ActivityIndicator size="small" color={theme.colors.text} />
+              <Text style={[styles.waitingUploadText, { color: theme.colors.textSecondary }]}>
+                Waiting for upload...
               </Text>
             </View>
           ) : (
@@ -769,6 +845,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   uploadingText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  waitingUploadContainer: {
+    width: '100%',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    borderRadius: 12,
+  },
+  waitingUploadText: {
     fontSize: 16,
     fontWeight: '500',
   },

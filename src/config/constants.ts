@@ -61,9 +61,16 @@ export const APP_CONFIG = {
   BUNDLE_ID: 'com.marketplace.live.screen',
 };
 
+// Upload Status Polling Configuration
+export const UPLOAD_STATUS_CONFIG = {
+  POLLING_INTERVAL_MS: 3000, // Poll every 3 seconds
+  MAX_POLLING_DURATION_MS: 120000, // Max 2 minutes polling
+};
+
 // API Endpoints
 export const API_ENDPOINTS = {
   UPLOAD_MOBILE_CONTENT: '/api/upload-mobile-content',
+  MERGED_FILE_STATUS: (taskId: string) => `/api/merged-mobile-file-status/${taskId}`,
   RECORDINGS: {
     START: '/api/v1/recordings/start',
     CHUNK: (recordingId: string) => `/api/v1/recordings/${recordingId}/chunk`,
