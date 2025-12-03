@@ -403,7 +403,9 @@ class ScreenCaptureModule: NSObject {
     if let status = defaults.dictionary(forKey: "uploadStatus") {
       resolve(status)
     } else {
-      resolve(nil)
+      resolve([
+        "status": "idle"
+      ])
     }
   }
   

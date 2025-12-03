@@ -74,7 +74,6 @@ export const HomeScreen: React.FC = () => {
   const [taskCompleted, setTaskCompleted] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [chunksUploaded, setChunksUploaded] = useState(0);
-  const [isFinalUploadComplete, setIsFinalUploadComplete] = useState(false);
   const [completedTaskName, setCompletedTaskName] = useState<string | null>(null);
   const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
   const [broadcastStarted, setBroadcastStarted] = useState(false);
@@ -215,74 +214,12 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [aiAppSelected, broadcastStarted, recordingStartTime]);
 
-  // Poll for final upload status when task is completed (separate effect)
-  useEffect(() => {
-    if (!taskCompleted || isFinalUploadComplete) return;
-    if (selectedAIAppType === 'chatgpt') {
-      // ChatGPT doesn't need to wait for upload
-      setIsFinalUploadComplete(true);
-      return;
-    }
-    
-    let cancelled = false;
-    
-    const pollUploadStatus = async () => {
-      let lastTimestamp: number | null = null;
-      let staleCount = 0;
-      
-      // Poll for max 10 seconds (20 iterations * 500ms)
-      for (let i = 0; i < 20; i++) {
-        if (cancelled) return;
-        try {
-          const status = await ScreenCapture.getUploadStatus();
-          
-          if (status?.chunksUploaded > 0) {
-            setChunksUploaded(status.chunksUploaded);
-          }
-          
-          // Check for isFinalUploaded or success status
-          if (status?.isFinalUploaded === true || status?.isFinalUploaded === 1 || 
-              status?.status === 'success') {
-            setIsFinalUploadComplete(true);
-            return;
-          }
-          
-          // If timestamp hasn't changed for 3 checks (1.5 sec), assume upload is done/stuck
-          if (status?.timestamp === lastTimestamp) {
-            staleCount++;
-            if (staleCount >= 3) {
-              setIsFinalUploadComplete(true);
-              return;
-            }
-          } else {
-            staleCount = 0;
-            lastTimestamp = status?.timestamp;
-          }
-        } catch {
-          // Ignore errors
-        }
-        await new Promise<void>(resolve => setTimeout(resolve, 500));
-      }
-      // Timeout - enable submit anyway
-      if (!cancelled) {
-        setIsFinalUploadComplete(true);
-      }
-    };
-    
-    pollUploadStatus();
-    
-    return () => {
-      cancelled = true;
-    };
-  }, [taskCompleted, isFinalUploadComplete, selectedAIAppType]);
-
   // Clear task and reset UI
   const resetTaskState = useCallback(() => {
     setTaskCompleted(false);
     setAiAppSelected(false);
     setRecordingDuration(0);
     setChunksUploaded(0);
-    setIsFinalUploadComplete(false);
     setCompletedTaskName(null);
     setRecordingStartTime(null);
     setBroadcastStarted(false);
@@ -661,13 +598,6 @@ export const HomeScreen: React.FC = () => {
               <ActivityIndicator size="small" color={theme.colors.text} />
               <Text style={[styles.uploadingText, { color: theme.colors.textSecondary }]}>
                 Submitting task...
-              </Text>
-            </View>
-          ) : !isFinalUploadComplete && selectedAIAppType !== 'chatgpt' ? (
-            <View style={[styles.uploadingContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-              <ActivityIndicator size="small" color={theme.colors.text} />
-              <Text style={[styles.uploadingText, { color: theme.colors.textSecondary }]}>
-                Waiting for upload to complete...
               </Text>
             </View>
           ) : (

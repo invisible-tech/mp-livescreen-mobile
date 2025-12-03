@@ -161,8 +161,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             "error": error ?? "",
             "timestamp": Date().timeIntervalSince1970,
             "chunksUploaded": status == "success" ? chunkIndex + 1 : chunkIndex,
-            "recordingId": recordingId ?? "",
-            "isFinalUploaded": isFinal && status == "success"
+            "recordingId": recordingId ?? ""
         ]
         
         defaults.set(statusDict, forKey: "uploadStatus")
@@ -1000,6 +999,9 @@ class SampleHandler: RPBroadcastSampleHandler {
                 
                 if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
                     log.log("✅ SUCCESS! Chunk \(chunkIndex) uploaded successfully")
+                    
+                    // Note: Success file is now written optimistically after starting upload (before response)
+                    // This call updates UserDefaults status
                     self?.updateUploadStatus(chunkIndex: chunkIndex, status: "success", isFinal: isFinal)
                     log.log("========== UPLOAD SUCCESS ==========")
                 } else {

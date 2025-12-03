@@ -67,7 +67,7 @@ class ScreenCaptureService : Service() {
     private var recordingStartTime: Long = 0
     
     // Configuration
-    private var appType: String = "gemini"  // "gemini" or "chatgpt"
+    private var appType: String = "gemini"  // "gemini", "chatgpt", or "search-live"
     
     private val handler = Handler(Looper.getMainLooper())
 

@@ -25,7 +25,6 @@ interface UploadStatus {
   timestamp: number;
   chunksUploaded: number;
   recordingId: string;
-  isFinalUploaded: boolean;
 }
 
 interface TaskParams {

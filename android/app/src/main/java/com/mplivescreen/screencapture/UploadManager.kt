@@ -33,7 +33,7 @@ class UploadManager(
         val stepId: String,
         val recordingId: String,
         val apiBaseUrl: String,
-        val appType: String,       // "gemini" or "chatgpt"
+        val appType: String,       // "gemini", "chatgpt", or "search-live"
         val taskType: String,      // "audio-video" or "audio"
         val xApiKey: String        // API key for authentication
     )
@@ -158,7 +158,7 @@ class UploadManager(
                     .post(requestBody)
                     .build()
                 
-                updateUploadStatus(chunkInfo.chunkIndex, "uploading")
+                updateUploadStatus(chunkInfo.chunkIndex, "uploading", null)
                 val startTime = System.currentTimeMillis()
                 
                 client.newCall(request).execute().use { response ->
@@ -171,7 +171,7 @@ class UploadManager(
                         Log.d(TAG, "   Response: $responseBody")
                         
                         chunksUploaded++
-                        updateUploadStatus(chunkInfo.chunkIndex, "success")
+                        updateUploadStatus(chunkInfo.chunkIndex, "success", null)
                         
                         // Clean up uploaded files
                         videoFile.delete()
@@ -205,12 +205,16 @@ class UploadManager(
      */
     private fun updateUploadStatus(chunkIndex: Int, status: String, error: String? = null) {
         val prefs = context.getSharedPreferences(UPLOAD_STATUS_PREFS, Context.MODE_PRIVATE)
+        val taskPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val recordingId = taskPrefs.getString("recordingId", "") ?: ""
+        
         prefs.edit().apply {
             putInt("chunkIndex", chunkIndex)
             putString("status", status)
             putString("error", error ?: "")
             putLong("timestamp", System.currentTimeMillis())
             putInt("chunksUploaded", chunksUploaded)
+            putString("recordingId", recordingId)
             apply()
         }
     }
@@ -225,7 +229,8 @@ class UploadManager(
             "status" to (prefs.getString("status", "idle") ?: "idle"),
             "error" to (prefs.getString("error", "") ?: ""),
             "timestamp" to prefs.getLong("timestamp", 0),
-            "chunksUploaded" to prefs.getInt("chunksUploaded", 0)
+            "chunksUploaded" to prefs.getInt("chunksUploaded", 0),
+            "recordingId" to (prefs.getString("recordingId", "") ?: "")
         )
     }
 
