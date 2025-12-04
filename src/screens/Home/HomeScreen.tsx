@@ -200,6 +200,16 @@ export const HomeScreen: React.FC = () => {
             setRecordingDuration(duration);
           }
           
+          // Get chunks uploaded count from native module
+          try {
+            const status = await ScreenCapture.getUploadStatus();
+            if (status?.chunksUploaded) {
+              setChunksUploaded(status.chunksUploaded);
+            }
+          } catch {
+            // Ignore errors
+          }
+          
           setAiAppSelected(false);
           setTaskCompleted(true);
         }
@@ -241,6 +251,15 @@ export const HomeScreen: React.FC = () => {
           const data = await response.json();
           console.log('[HomeScreen] Merged file ready:', data);
           if (!cancelled) {
+            // Get final chunks count
+            try {
+              const status = await ScreenCapture.getUploadStatus();
+              if (status?.chunksUploaded) {
+                setChunksUploaded(status.chunksUploaded);
+              }
+            } catch {
+              // Ignore
+            }
             setIsUploadComplete(true);
           }
           return true; // Stop polling
