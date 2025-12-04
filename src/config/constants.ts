@@ -1,7 +1,7 @@
 import Config from 'react-native-config';
 
 // Server Environment Types
-export type ServerEnvironment = 'production' | 'staging' | 'dev' | 'crdev' | 'ali';
+export type ServerEnvironment = 'production' | 'staging' | 'dev' | 'crdev' | 'ali' | 'abdul';
 
 // Server Environment Configuration
 export const SERVER_ENVIRONMENTS: Record<ServerEnvironment, { apiBaseUrl: string; marketplaceUrl: string; label: string }> = {
@@ -29,6 +29,11 @@ export const SERVER_ENVIRONMENTS: Record<ServerEnvironment, { apiBaseUrl: string
     apiBaseUrl: 'https://vdi-dev-ali.invsta.systems',
     marketplaceUrl: 'https://marketplace.qa.invsta.systems',
     label: 'Ali (Dev)',
+  },
+  abdul: {
+    apiBaseUrl: 'https://vdi-dev-abdul.invsta.systems',
+    marketplaceUrl: 'https://marketplace.qa.invsta.systems',
+    label: 'Dev - Abdul',
   },
 };
 
